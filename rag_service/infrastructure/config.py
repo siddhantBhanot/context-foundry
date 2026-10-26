@@ -183,7 +183,7 @@ class Settings(BaseSettings):
         default_factory=lambda: int(
             os.getenv(
                 "EMBEDDING_DIMENSION",
-                "1024",
+                "1024" if (os.getenv("EMBEDDING_PROVIDER") == "bedrock" and (os.getenv("AWS_BEARER_TOKEN_BEDROCK") or os.getenv("AWS_ACCESS_KEY_ID"))) else "384",
             )
         )
     )
