@@ -48,7 +48,6 @@ dist-ssr/
 data/*.db
 
 # IDE & Agent State
-.agents/
 .antigravity/
 .DS_Store
 
