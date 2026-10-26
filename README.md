@@ -1,7 +1,7 @@
 # ContextFoundry
 
-> **Autonomous Engineering Intelligence & Context Continuity Platform**  
-> *A high-performance, multi-tenant Retrieval-Augmented Generation (RAG) platform bridging technical microservice knowledge and organizational relationship memory.*
+> **Autonomous Engineering Intelligence Platform for Microservices**  
+> *A high-performance, production-ready Retrieval-Augmented Generation (RAG) platform bridging technical microservice codebases, architectural knowledge, and developer onboarding.*
 
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/React-19.2+-61DAFB.svg?logo=react&logoColor=black)](https://react.dev)
@@ -14,20 +14,15 @@
 
 ## 🌟 Executive Overview
 
-**ContextFoundry** is an enterprise-grade Knowledge Intelligence platform designed to solve the critical problem of tribal knowledge silos, slow developer onboarding, and lost operational context.
+**ContextFoundry** is an enterprise-grade Engineering Intelligence platform designed to eradicate tribal knowledge silos, accelerate developer onboarding, and provide instant, verified answers across complex microservice architectures.
 
-The platform provides two dedicated, persona-tailored workspaces powered by a unified RAG engine:
+Key capabilities include:
 
-1. **Dev Central (Engineering Intelligence Hub)**:
-   - **Interactive Microservice Chat**: Grounded Q&A against source code, APIs, and architectural decisions with exact markdown citations.
-   - **Knowledge Cafe**: University-style interactive training courses featuring module syllabi, lesson progression, doubt-clearing AI assistants, and automated quizzes.
-   - **Dynamic Architecture Diagrams**: Automatically generates interactive Mermaid sequence flows and entity diagrams from retrieved system context.
-   - **Self-Service Ingestion**: Drag-and-drop document ingestion supporting PDF, Markdown, and source code.
-
-2. **Saathi (Relationship Continuity Engine)**:
-   - **Client Relationship Continuity**: Preserves institutional memory when advisors or relationship managers transition accounts.
-   - **Pre-Call Briefings & Executive Summaries**: AI-synthesized client dossiers, risk profiles, open commitments, and past interaction timelines.
-   - **Context Validation**: Customer validation workflow allowing clients to review and confirm relationship priorities.
+- **Interactive Microservice Chat**: Grounded Q&A against source code, APIs, and architectural decisions with exact line-level markdown citations.
+- **Knowledge Cafe (Interactive KT)**: Structured onboarding curriculum featuring module syllabi, lesson progression, doubt-clearing AI assistants, and automated quizzes.
+- **Dynamic Architecture Diagrams**: Automatically generates and renders interactive Mermaid sequence flows and entity relationship diagrams from retrieved code context.
+- **Self-Service Ingestion**: Drag-and-drop document and codebase ingestion supporting ZIP archives, PDF, Markdown, and source code with AST-aware chunking.
+- **Conversation Management & Sharing**: Multi-turn conversation history drawer, shareable read-only links, and granular feedback controls.
 
 ---
 
@@ -36,8 +31,7 @@ The platform provides two dedicated, persona-tailored workspaces powered by a un
 ```mermaid
 graph TD
     subgraph Presentation_Layer ["Frontend Workspace (React 19 + TypeScript + Tailwind)"]
-        UI_Dev["Dev Central<br/>• Code Chat & Ingestion<br/>• Knowledge Cafe (Courses & Quizzes)<br/>• Dynamic Mermaid Diagrams"]
-        UI_Saathi["Saathi Workspace<br/>• Client Dossier & Timelines<br/>• Pre-Call AI Briefings<br/>• Handover Continuity Engine"]
+        UI_Dev["Dev Central<br/>• Codebase & Architecture Chat<br/>• Knowledge Cafe (Courses & Quizzes)<br/>• Dynamic Mermaid Diagrams<br/>• Self-Service Ingestion Modal"]
     end
 
     subgraph API_Layer ["Backend Gateway (FastAPI + Async Python)"]
@@ -47,17 +41,16 @@ graph TD
     end
 
     subgraph RAG_Engine ["RAG & Ingestion Engine (LlamaIndex + Multi-Provider)"]
-        Chunker["AST & Markdown Chunkers (Kotlin, MD, PDF)"]
-        Embedder["Embedding Provider<br/>• AWS Bedrock Titan v2<br/>• Local/Mock Embeddings"]
+        Chunker["AST & Markdown Chunkers (Kotlin, Python, MD, PDF)"]
+        Embedder["Embedding Provider<br/>• AWS Bedrock Titan v2<br/>• FastEmbed / Local Embeddings"]
         FallbackLLM["Multi-Provider LLM Fallback Engine<br/>1. AWS Bedrock (Claude 3.5 / Sonnet 4.6)<br/>2. Groq Cloud (Llama 3.3 70B Versatile)<br/>3. OpenAI (GPT-4o)"]
     end
 
     subgraph Vector_Storage ["Vector Database (Qdrant)"]
-        QdrantStore["Qdrant Cloud / Local Cluster<br/>• Tenant-Isolated Vector Collections<br/>• Payload Filtering by Service / Customer"]
+        QdrantStore["Qdrant Cloud / Local Cluster<br/>• Tenant-Isolated Vector Collections<br/>• Payload Filtering by Microservice ID"]
     end
 
     UI_Dev -->|HTTP / SSE Streaming| API_Layer
-    UI_Saathi -->|HTTP / SSE Streaming| API_Layer
     Auth --> DirectAdapter
     DirectAdapter --> RAG_Engine
     Chunker --> Embedder
@@ -70,11 +63,11 @@ graph TD
 
 ## 🚀 Key Technical Highlights
 
-- **Multi-Provider LLM Resilience**: Dynamic multi-provider orchestration with automatic fallback between AWS Bedrock, Groq Cloud, and OpenAI to eliminate vendor lock-in and handle rate limits.
-- **Tenant-Isolated Vector Storage**: Segmented retrieval pipelines utilizing Qdrant payload filters, guaranteeing strict isolation between services and customer dossiers.
-- **Real-Time Token Streaming**: Server-Sent Events (SSE) streaming with low time-to-first-token (TTFT) and citation attribution.
-- **Code & Markdown AST Parsing**: Custom chunkers that respect function boundaries and document section headers rather than splitting mid-token.
-- **Clean Hexagonal Architecture**: Modular separation between Presentation, Application, Domain, and Infrastructure adapters.
+- **Multi-Provider LLM Resilience**: Dynamic multi-provider orchestration with automatic fallback between AWS Bedrock, Groq Cloud, and OpenAI to eliminate vendor lock-in and handle rate limits gracefully.
+- **Tenant-Isolated Vector Storage**: Segmented retrieval pipelines utilizing Qdrant payload filters, guaranteeing strict isolation between microservice codebases and documentation collections.
+- **Real-Time Token Streaming**: Server-Sent Events (SSE) streaming with ultra-low time-to-first-token (TTFT) and citation attribution.
+- **AST & Header-Aware Chunking**: Specialized chunkers that respect code function boundaries and document section headers rather than splitting mid-token.
+- **Clean Hexagonal Architecture**: Modular separation between Presentation, Application, Domain, and Infrastructure adapters following clean architecture principles.
 
 ---
 
@@ -151,24 +144,23 @@ npm run dev
 
 ---
 
-## 🧪 Quick Demo Logins
+## 🧪 Built-In Demo Login
 
-The application includes built-in demo credentials for quick persona exploration:
+For quick local evaluation, an engineer demo account is pre-configured:
 
-| Persona | Demo Email | Workspace | Description |
+| Role | Demo Email | Workspace | Description |
 | :--- | :--- | :--- | :--- |
 | **Software Engineer** | `engineer@contextfoundry.dev` | **Dev Central** | Explore architecture docs, ask RAG questions, and browse Knowledge Cafe courses. |
-| **Client Advisor** | `advisor@contextfoundry.dev` | **Saathi** | Explore client dossiers, pre-call briefs, timeline records, and handover memory. |
 
 ---
 
 ## 💼 Portfolio Highlights & Resume Summary
 
-> **ContextFoundry — Autonomous Engineering Intelligence & Multi-Tenant Knowledge Platform**
-> - Architected a production-ready, dual-persona RAG platform serving software engineering teams and client relationship managers.
+> **ContextFoundry — Autonomous Engineering Intelligence Platform for Microservices**
+> - Architected a production-ready RAG platform serving software engineering teams navigating distributed microservice codebases.
 > - Implemented an intelligent multi-provider LLM orchestration layer (AWS Bedrock, Groq, OpenAI) with automatic fallback and sub-second token streaming.
 > - Designed tenant-isolated vector retrieval with Qdrant, supporting structured AST-aware chunking of source code, Markdown, and technical specifications.
-> - Built a responsive React 19 / TypeScript frontend featuring interactive courses, automated quizzes, live Markdown formatting, and automated Mermaid diagram rendering.
+> - Built a modern React 19 / TypeScript frontend featuring interactive courses, automated quizzes, live Markdown formatting, and automated Mermaid diagram rendering.
 > - Containerized the entire multi-service stack using multi-stage Docker builds and Docker Compose for zero-friction local and cloud deployments.
 
 ---
@@ -176,3 +168,4 @@ The application includes built-in demo credentials for quick persona exploration
 ## 📄 License
 
 This project is licensed under the [MIT License](LICENSE).
+

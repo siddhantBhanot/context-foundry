@@ -446,8 +446,19 @@ class DirectRAGClient(RAGClientProtocol):
             import zipfile
 
             extracted_files = []
+            MAX_ZIP_ENTRIES = 500
+            MAX_ZIP_EXTRACTED_BYTES = 50 * 1024 * 1024  # 50 MB
+
             try:
                 with zipfile.ZipFile(io.BytesIO(content_bytes)) as zf:
+                    if len(zf.infolist()) > MAX_ZIP_ENTRIES:
+                        raise ValueError(f"Archive contains too many entries (limit: {MAX_ZIP_ENTRIES}).")
+                    total_uncompressed = sum(m.file_size for m in zf.infolist())
+                    if total_uncompressed > MAX_ZIP_EXTRACTED_BYTES:
+                        raise ValueError(
+                            f"Archive uncompressed size exceeds limit of {MAX_ZIP_EXTRACTED_BYTES // (1024 * 1024)}MB."
+                        )
+
                     # Security check: zip-slip check
                     for member in zf.infolist():
                         p = Path(member.filename)
@@ -460,7 +471,9 @@ class DirectRAGClient(RAGClientProtocol):
                             continue
                         inner_path = Path(member.filename)
                         if inner_path.suffix.lower() in allowed_inner and not inner_path.name.startswith("."):
-                            target_file = pending_dir / inner_path
+                            target_file = (pending_dir / inner_path).resolve()
+                            if not target_file.is_relative_to(pending_dir.resolve()):
+                                raise ValueError(f"Path traversal detected: {member.filename}")
                             target_file.parent.mkdir(parents=True, exist_ok=True)
                             target_file.write_bytes(zf.read(member.filename))
                             extracted_files.append(str(inner_path))
@@ -635,6 +648,16 @@ class DirectRAGClient(RAGClientProtocol):
 
         try:
             with zipfile.ZipFile(io.BytesIO(content_bytes)) as zf:
+                MAX_ZIP_ENTRIES = 500
+                MAX_ZIP_EXTRACTED_BYTES = 50 * 1024 * 1024  # 50 MB
+                if len(zf.infolist()) > MAX_ZIP_ENTRIES:
+                    raise ValueError(f"Archive contains too many entries (limit: {MAX_ZIP_ENTRIES}).")
+                total_uncompressed = sum(m.file_size for m in zf.infolist())
+                if total_uncompressed > MAX_ZIP_EXTRACTED_BYTES:
+                    raise ValueError(
+                        f"Archive uncompressed size exceeds limit of {MAX_ZIP_EXTRACTED_BYTES // (1024 * 1024)}MB."
+                    )
+
                 # Security: prevent zip-slip attacks
                 for member in zf.infolist():
                     target_path = Path(member.filename)
@@ -661,9 +684,19 @@ class DirectRAGClient(RAGClientProtocol):
                     if not course or not course.id:
                         raise ValueError("Failed to parse valid course definition from course-structure.md")
 
-                    pending_root = _project_root / "rag_service" / "knowledge_cafe" / "pending"
+                    import re
+                    course_id_pattern = re.compile(r"^[a-zA-Z0-9_\-]+$")
+                    if not course_id_pattern.match(course.id):
+                        raise ValueError(
+                            f"Invalid course ID '{course.id}'. Must contain only alphanumeric characters, dashes, and underscores."
+                        )
+
+                    pending_root = (_project_root / "rag_service" / "knowledge_cafe" / "pending").resolve()
                     pending_root.mkdir(parents=True, exist_ok=True)
-                    dest_dir = pending_root / course.id
+                    dest_dir = (pending_root / course.id).resolve()
+                    if not dest_dir.is_relative_to(pending_root):
+                        raise ValueError(f"Path traversal detected in course ID '{course.id}'.")
+
                     if dest_dir.exists():
                         shutil.rmtree(dest_dir)
                     shutil.copytree(course_dir, dest_dir)
@@ -683,7 +716,7 @@ class DirectRAGClient(RAGClientProtocol):
         from datetime import datetime, timezone
         from rag_service.knowledge_cafe.course_loader import get_course_loader
 
-        pending_root = _project_root / "rag_service" / "knowledge_cafe" / "pending"
+        pending_root = (_project_root / "rag_service" / "knowledge_cafe" / "pending").resolve()
         if not pending_root.is_dir():
             return []
 
@@ -711,14 +744,25 @@ class DirectRAGClient(RAGClientProtocol):
         return courses
 
     async def trigger_course_ingestion(self, course_id: str) -> dict:
+        import re
         import shutil
+
+        course_id_pattern = re.compile(r"^[a-zA-Z0-9_\-]+$")
+        if not course_id or not course_id_pattern.match(course_id):
+            raise ValueError(f"Invalid course ID '{course_id}'. Must contain only alphanumeric characters, dashes, and underscores.")
+
         if self._course_indexer is None:
             self._init_rag()
         if self._course_indexer is None:
             raise RAGServiceException("Knowledge Cafe Course Indexer could not be initialized.")
 
-        pending_dir = _project_root / "rag_service" / "knowledge_cafe" / "pending" / course_id
-        courses_dir = _project_root / "rag_service" / "knowledge_cafe" / "courses" / course_id
+        pending_root = (_project_root / "rag_service" / "knowledge_cafe" / "pending").resolve()
+        courses_root = (_project_root / "rag_service" / "knowledge_cafe" / "courses").resolve()
+        pending_dir = (pending_root / course_id).resolve()
+        courses_dir = (courses_root / course_id).resolve()
+
+        if not pending_dir.is_relative_to(pending_root) or not courses_dir.is_relative_to(courses_root):
+            raise ValueError("Invalid path traversal detected.")
 
         if pending_dir.is_dir():
             if courses_dir.exists():

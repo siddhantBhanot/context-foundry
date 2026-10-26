@@ -8,7 +8,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from backend_service.app.api.middleware.request_id import RequestIdMiddleware, get_current_request_id
-from backend_service.app.api.routes import auth, documents, feedback, health, knowledge, kt, models, query, saathi, services
+from backend_service.app.api.routes import auth, documents, feedback, health, knowledge, kt, models, query, services
 from backend_service.app.api.schemas.common import ErrorResponse
 from backend_service.app.domain.exceptions.base import (
     AuthenticationException,
@@ -33,6 +33,12 @@ logger = logging.getLogger("backend_service")
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     settings = get_settings()
+    if settings.environment.lower() == "production" and (
+        not settings.jwt_secret_key
+        or settings.jwt_secret_key == "contextfoundry-dev-secret-key-32chars-minimum-required"
+    ):
+        raise RuntimeError("CRITICAL SECURITY ERROR: Secure non-default JWT_SECRET_KEY must be configured in production environment!")
+
     logger.info("Initializing SQLite database persistence...")
     db = get_database()
     await db.init_schema()
@@ -198,7 +204,6 @@ def create_app() -> FastAPI:
     api_v1.include_router(documents.router)
     api_v1.include_router(models.router)
     api_v1.include_router(kt.router)
-    api_v1.include_router(saathi.router)
 
     app.include_router(api_v1)
 
@@ -206,7 +211,7 @@ def create_app() -> FastAPI:
     @app.get("/")
     async def root():
         return {
-            "name": "FC Central — Engineering Intelligence Backend Service",
+            "name": "ContextFoundry — Engineering Intelligence Backend Service",
             "version": "1.0.0",
             "docs": "/docs",
             "health": "/api/v1/health",

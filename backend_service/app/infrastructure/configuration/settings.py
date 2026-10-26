@@ -47,8 +47,8 @@ class Settings(BaseSettings):
     cors_origins: List[str] = Field(
         default_factory=lambda: [
             orig.strip()
-            for orig in os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000,*").split(",")
-            if orig.strip()
+            for orig in os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000").split(",")
+            if orig.strip() and orig.strip() != "*"
         ]
     )
 

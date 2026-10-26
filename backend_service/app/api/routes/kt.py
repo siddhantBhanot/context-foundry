@@ -20,6 +20,7 @@ from backend_service.app.api.schemas.kt import (
     LessonDetailResponse,
 )
 from backend_service.app.application.services.kt_service import KTService
+from backend_service.app.domain.exceptions.base import ForbiddenException
 from backend_service.app.domain.models.user import User
 
 router = APIRouter(prefix="/kt", tags=["Knowledge Cafe"])
@@ -35,10 +36,7 @@ async def list_courses(
     Browse all creator-defined Knowledge Cafe courses with live user enrollment progress.
     """
     user_id = current_user.id if current_user else None
-    target_group = group
-    if not target_group and current_user:
-        target_group = "banking" if current_user.role == "banking_staff" else "technical"
-    courses = await kt_service.list_courses(user_id=user_id, group=target_group)
+    courses = await kt_service.list_courses(user_id=user_id, group=group)
     return [CourseSummaryResponse(**c) for c in courses]
 
 
@@ -251,7 +249,11 @@ async def reset_kt_progress(
 ) -> Dict[str, Any]:
     """
     Reset Knowledge Cafe progress for the current user, or for all users when all_users=True.
+    Resetting all users requires administrator privileges.
     """
+    if all_users and current_user.role != "admin":
+        raise ForbiddenException("Only administrators can reset progress across all users.")
+
     target_user_id = None if all_users else current_user.id
     return await kt_service.reset_progress(
         user_id=target_user_id,
