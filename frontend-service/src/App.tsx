@@ -599,6 +599,7 @@ function DashboardApp() {
           <KnowledgeCafeView
             selectedModel={selectedModel}
             userRole={user?.role}
+            services={services}
             onViewSource={(file, service) => {
               setActiveSourceModal({
                 isOpen: true,
@@ -639,6 +640,38 @@ function DashboardApp() {
                 <span className="font-semibold text-slate-700">integrations</span> — straight from your service documentation.
               </p>
 
+              {/* Empty State Banner if no files are ingested for the selected service */}
+              {(() => {
+                const activeSvc = services.find((s) => s.id === selectedService);
+                const hasDocs = activeSvc ? (activeSvc.doc_count !== undefined ? activeSvc.doc_count > 0 : activeSvc.has_indexed_data) : true;
+                if (!hasDocs) {
+                  return (
+                    <div className="w-full mb-5 p-4 rounded-2xl bg-orange-50/90 border border-orange-200/90 text-left flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 rounded-xl bg-white text-[#f05a28] shadow-2xs shrink-0 mt-0.5 sm:mt-0">
+                          <UploadCloud className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-xs text-slate-900">
+                            No knowledge indexed yet for <span className="font-mono text-[#f05a28]">{selectedService}</span>
+                          </h4>
+                          <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                            Upload Kotlin source (<code className="font-mono text-slate-700">.kt</code>, <code className="font-mono text-slate-700">.kts</code>), Markdown (<code className="font-mono text-slate-700">.md</code>), PDF (<code className="font-mono text-slate-700">.pdf</code>), or a ZIP archive to ground the AI.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setIsIngestionModalOpen(true)}
+                        className="px-4 py-2 bg-[#f05a28] hover:bg-[#d94b1c] text-white text-xs font-bold rounded-xl shadow-2xs transition-colors shrink-0 cursor-pointer"
+                      >
+                        Upload Code & Docs
+                      </button>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
               {/* Central Input Box Container */}
               <div className="w-full bg-white rounded-2xl border border-slate-200 shadow-xs p-4 mb-8 transition-all focus-within:border-slate-300 focus-within:shadow-md">
                 {/* Top Row: Context Selectors (SERVICE + MODEL) */}
@@ -650,18 +683,26 @@ function DashboardApp() {
                     <div className="relative">
                       <select
                         value={selectedService}
-                        onChange={(e) => setSelectedService(e.target.value)}
+                        onChange={(e) => {
+                          if (e.target.value === '__add_new__') {
+                            setIsIngestionModalOpen(true);
+                          } else {
+                            setSelectedService(e.target.value);
+                          }
+                        }}
                         className="appearance-none bg-slate-100 hover:bg-slate-200/70 text-slate-700 text-xs font-semibold pl-2.5 pr-6 py-1 rounded-lg border border-slate-200/60 focus:outline-none cursor-pointer"
                       >
                         {services.map((s) => (
                           <option key={s.id} value={s.id}>
-                            {s.name}
+                            {s.name} {s.doc_count !== undefined ? `(${s.doc_count})` : ''}
                           </option>
                         ))}
+                        <option value="__add_new__">+ Add Microservice...</option>
                       </select>
                       <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2 top-2 pointer-events-none" />
                     </div>
                   </div>
+
 
                   {models.length > 0 && (
                     <div className="flex items-center gap-1.5">
@@ -927,14 +968,21 @@ function DashboardApp() {
                     <div className="relative">
                       <select
                         value={selectedService}
-                        onChange={(e) => setSelectedService(e.target.value)}
+                        onChange={(e) => {
+                          if (e.target.value === '__add_new__') {
+                            setIsIngestionModalOpen(true);
+                          } else {
+                            setSelectedService(e.target.value);
+                          }
+                        }}
                         className="appearance-none bg-slate-100 hover:bg-slate-200/70 text-slate-700 text-xs font-semibold pl-2.5 pr-6 py-1 rounded-lg border border-slate-200/60 focus:outline-none cursor-pointer"
                       >
                         {services.map((s) => (
                           <option key={s.id} value={s.id}>
-                            {s.name}
+                            {s.name} {s.doc_count !== undefined ? `(${s.doc_count})` : ''}
                           </option>
                         ))}
+                        <option value="__add_new__">+ Add Microservice...</option>
                       </select>
                       <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2 top-2 pointer-events-none" />
                     </div>
@@ -1017,6 +1065,14 @@ function DashboardApp() {
         onClose={() => setIsIngestionModalOpen(false)}
         service={selectedService}
         services={services}
+        onServiceCreated={(newService) => {
+          setServices((prev) => [...prev, newService]);
+          setSelectedService(newService.id);
+        }}
+        onSuccess={async () => {
+          const updated = await apiClient.listServices();
+          if (updated && updated.length > 0) setServices(updated);
+        }}
       />
 
       {/* Conversation History Drawer */}

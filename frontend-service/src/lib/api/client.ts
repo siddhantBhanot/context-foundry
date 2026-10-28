@@ -8,6 +8,9 @@ import type {
   CourseIngestResponse,
   CourseSummary,
   CourseUploadResponse,
+  CreateCoursePayload,
+  CreateCourseResult,
+  CreateServicePayload,
   DocumentDetailResponse,
   EnrollResult,
   FeedbackRequest,
@@ -370,6 +373,19 @@ export class ApiClient {
   }
 
   /**
+   * Purge existing Qdrant points for this microservice and re-index all staged files from scratch
+   */
+  async reindexKnowledge(service: string): Promise<KnowledgeIngestResponse> {
+    return this.fetch<KnowledgeIngestResponse>('/api/v1/knowledge/reindex', {
+      method: 'POST',
+      body: JSON.stringify({
+        service,
+      }),
+    });
+  }
+
+
+  /**
    * Upload a Knowledge Cafe course package (.zip archive) to staging (no ingestion triggered)
    */
   async uploadCourseZip(file: File): Promise<CourseUploadResponse> {
@@ -430,6 +446,17 @@ export class ApiClient {
   async listServices(): Promise<Microservice[]> {
     return this.fetch<Microservice[]>('/api/v1/services');
   }
+
+  /**
+   * Register a new microservice context
+   */
+  async createService(payload: CreateServicePayload): Promise<Microservice> {
+    return this.fetch<Microservice>('/api/v1/services', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
 
   /**
    * List configured LLM models available on the backend
@@ -518,6 +545,17 @@ export class ApiClient {
     const query = group ? `?group=${encodeURIComponent(group)}` : '';
     return this.fetch<CourseSummary[]>(`/api/v1/kt/courses${query}`);
   }
+
+  /**
+   * Author and publish a new Knowledge Cafe course & quiz
+   */
+  async createCourse(payload: CreateCoursePayload): Promise<CreateCourseResult> {
+    return this.fetch<CreateCourseResult>('/api/v1/kt/courses', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    });
+  }
+
 
   /**
    * Retrieve full course curriculum and lesson sequence from course-structure.md

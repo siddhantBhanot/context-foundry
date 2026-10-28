@@ -11,6 +11,9 @@ _project_root = Path(__file__).resolve().parents[4]
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
+_storage_dir = _project_root / "backend_service" / "data" / "storage" / "services"
+_sample_dir = _project_root / "rag_service" / "sample_data"
+
 from backend_service.app.domain.exceptions.base import (
     DomainException,
     RAGServiceException,
@@ -407,8 +410,65 @@ class DirectRAGClient(RAGClientProtocol):
         from rag_service.infrastructure.document_reader import DocumentReader
         from backend_service.app.domain.models.knowledge import DocumentView
 
-        sample_dir = _project_root / "rag_service" / "sample_data"
-        reader = DocumentReader(data_dir=sample_dir)
+        clean_path = file_path.strip().lstrip("/\\")
+
+        # 1. Search in dedicated storage
+        candidates = [
+            _storage_dir / service / clean_path,
+            _storage_dir / service / "pending" / clean_path,
+            _sample_dir / service / clean_path,
+            _sample_dir / service / "pending" / clean_path,
+        ]
+
+        found_path: Optional[Path] = None
+        for c in candidates:
+            if c.is_file():
+                found_path = c
+                break
+
+        # If not found by direct relative path, search by filename
+        if not found_path:
+            filename = Path(clean_path).name
+            for base in [_storage_dir / service, _sample_dir / service]:
+                if base.is_dir():
+                    for p in base.rglob("*"):
+                        if p.is_file() and p.name == filename:
+                            found_path = p
+                            break
+                if found_path:
+                    break
+
+        if found_path and found_path.is_file():
+            stat = found_path.stat()
+            suffix = found_path.suffix.lower()
+            if suffix == ".pdf":
+                try:
+                    from pypdf import PdfReader
+                    reader = PdfReader(str(found_path))
+                    pages = []
+                    for i, page in enumerate(reader.pages):
+                        txt = page.extract_text() or ""
+                        pages.append(f"## Page {i + 1}\n\n{txt.strip()}")
+                    content = "\n\n---\n\n".join(pages)
+                except Exception as e:
+                    content = f"Error reading PDF content: {e}"
+                content_type = "pdf"
+            else:
+                content = found_path.read_text(encoding="utf-8", errors="replace")
+                content_type = "kotlin" if suffix in {".kt", ".kts"} else "markdown"
+
+            lines = content.splitlines()
+            return DocumentView(
+                file=found_path.name,
+                service=service,
+                content=content,
+                content_type=content_type,
+                total_lines=len(lines),
+                size_bytes=stat.st_size,
+            )
+
+        # Fallback to DocumentReader
+        reader = DocumentReader(data_dir=_sample_dir)
         doc = reader.read_document(service=service, file_path=file_path)
         return DocumentView(
             file=doc.file,
@@ -438,7 +498,7 @@ class DirectRAGClient(RAGClientProtocol):
                 f"Unsupported file format '{suffix}'. Supported formats: .kt, .kts, .md, .pdf, or .zip archive."
             )
 
-        pending_dir = _project_root / "rag_service" / "sample_data" / service / "pending"
+        pending_dir = _storage_dir / service / "pending"
         pending_dir.mkdir(parents=True, exist_ok=True)
 
         if suffix == ".zip":
@@ -516,10 +576,6 @@ class DirectRAGClient(RAGClientProtocol):
         if not service or not service_pattern.match(service):
             raise ValueError(f"Invalid service identifier: '{service}'")
 
-        service_dir = _project_root / "rag_service" / "sample_data" / service
-        if not service_dir.is_dir():
-            return []
-
         def _get_format(sfx: str) -> str:
             s = sfx.lower()
             if s == ".pdf":
@@ -530,35 +586,43 @@ class DirectRAGClient(RAGClientProtocol):
 
         allowed_exts = {".md", ".markdown", ".pdf", ".kt", ".kts"}
         results = []
+        seen_names = set()
 
-        # 1. Check pending directory (recursive)
-        pending_dir = service_dir / "pending"
-        if pending_dir.is_dir():
-            for p in pending_dir.rglob("*"):
-                if p.is_file() and p.suffix.lower() in allowed_exts:
+        for base_dir in [_storage_dir / service, _sample_dir / service]:
+            if not base_dir.is_dir():
+                continue
+
+            # 1. Check pending directory
+            pending_dir = base_dir / "pending"
+            if pending_dir.is_dir():
+                for p in pending_dir.rglob("*"):
+                    if p.is_file() and p.suffix.lower() in allowed_exts:
+                        if p.name in seen_names:
+                            continue
+                        stat = p.stat()
+                        rel_path = str(p.relative_to(base_dir))
+                        results.append({
+                            "name": p.name,
+                            "path": rel_path,
+                            "service": service,
+                            "format": _get_format(p.suffix),
+                            "size_bytes": stat.st_size,
+                            "status": "pending",
+                            "modified_at": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
+                        })
+                        seen_names.add(p.name)
+
+            # 2. Check service root and subdirectories for ingested documents (excluding pending)
+            for p in base_dir.rglob("*"):
+                if (
+                    p.is_file()
+                    and p.suffix.lower() in allowed_exts
+                    and "pending" not in p.parts
+                ):
+                    if p.name in seen_names:
+                        continue
                     stat = p.stat()
-                    rel_path = str(p.relative_to(service_dir))
-                    results.append({
-                        "name": p.name,
-                        "path": rel_path,
-                        "service": service,
-                        "format": _get_format(p.suffix),
-                        "size_bytes": stat.st_size,
-                        "status": "pending",
-                        "modified_at": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
-                    })
-
-        # 2. Check service root and subdirectories for ingested documents (excluding pending)
-        seen_paths = set()
-        for p in service_dir.rglob("*"):
-            if (
-                p.is_file()
-                and p.suffix.lower() in allowed_exts
-                and "pending" not in p.parts
-            ):
-                stat = p.stat()
-                rel_path = str(p.relative_to(service_dir))
-                if rel_path not in seen_paths:
+                    rel_path = str(p.relative_to(base_dir))
                     results.append({
                         "name": p.name,
                         "path": rel_path,
@@ -568,7 +632,7 @@ class DirectRAGClient(RAGClientProtocol):
                         "status": "ingested",
                         "modified_at": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
                     })
-                    seen_paths.add(rel_path)
+                    seen_names.add(p.name)
 
         # Sort pending first, then by name
         results.sort(key=lambda x: (0 if x["status"] == "pending" else 1, x["name"].lower()))
@@ -585,41 +649,57 @@ class DirectRAGClient(RAGClientProtocol):
         if self._ingestion is None:
             raise RAGServiceException("RAG Ingestion pipeline could not be initialized.")
 
-        target_dir = (
-            Path(source_directory)
-            if source_directory
-            else _project_root / "rag_service" / "sample_data" / service
-        )
+        target_dirs = []
+        if source_directory:
+            target_dirs.append(Path(source_directory))
+        else:
+            storage_service = _storage_dir / service
+            sample_service = _sample_dir / service
+            if storage_service.exists():
+                target_dirs.append(storage_service)
+            if sample_service.exists():
+                target_dirs.append(sample_service)
+
+            if not target_dirs:
+                # If neither exists, ensure storage directory is created
+                storage_service.mkdir(parents=True, exist_ok=True)
+                target_dirs.append(storage_service)
 
         job = IngestionJob(
             id=str(uuid.uuid4()),
             service=service,
-            source_path=str(target_dir),
+            source_path=str(target_dirs[0]),
             status=IngestionStatus.PROCESSING,
         )
 
         try:
-            if not target_dir.exists():
-                job.status = IngestionStatus.FAILED
-                job.error_message = f"Source directory '{target_dir}' does not exist."
-                job.completed_at = datetime.now(timezone.utc)
-                return job
+            total_files = 0
+            total_chunks = 0
+            all_indexed_files = []
 
-            # Promote pending files to target_dir before ingestion
-            pending_dir = target_dir / "pending"
-            if pending_dir.is_dir():
-                for p in list(pending_dir.rglob("*")):
-                    if p.is_file() and p.suffix.lower() in {".md", ".markdown", ".pdf", ".kt", ".kts"}:
-                        rel = p.relative_to(pending_dir)
-                        dest = target_dir / rel
-                        dest.parent.mkdir(parents=True, exist_ok=True)
-                        shutil.move(str(p), str(dest))
-                shutil.rmtree(pending_dir, ignore_errors=True)
+            for target_dir in target_dirs:
+                if not target_dir.exists():
+                    continue
 
-            ingest_result = await self._ingestion.ingest_directory(target_dir, service=service)
-            job.total_files = ingest_result.get("total_files", 0)
-            job.total_chunks = ingest_result.get("total_chunks", 0)
-            job.files_indexed = [Path(f).name for f in ingest_result.get("files", [])]
+                # Promote pending files before ingestion
+                pending_dir = target_dir / "pending"
+                if pending_dir.is_dir():
+                    for p in list(pending_dir.rglob("*")):
+                        if p.is_file() and p.suffix.lower() in {".md", ".markdown", ".pdf", ".kt", ".kts"}:
+                            rel = p.relative_to(pending_dir)
+                            dest = target_dir / rel
+                            dest.parent.mkdir(parents=True, exist_ok=True)
+                            shutil.move(str(p), str(dest))
+                    shutil.rmtree(pending_dir, ignore_errors=True)
+
+                ingest_result = await self._ingestion.ingest_directory(target_dir, service=service)
+                total_files += ingest_result.get("total_files", 0)
+                total_chunks += ingest_result.get("total_chunks", 0)
+                all_indexed_files.extend([Path(f).name for f in ingest_result.get("files", [])])
+
+            job.total_files = total_files
+            job.total_chunks = total_chunks
+            job.files_indexed = all_indexed_files
             job.status = IngestionStatus.COMPLETED
             job.completed_at = datetime.now(timezone.utc)
             return job
@@ -628,6 +708,131 @@ class DirectRAGClient(RAGClientProtocol):
             job.error_message = str(e)
             job.completed_at = datetime.now(timezone.utc)
             return job
+
+    async def reindex_service(
+        self,
+        service: str = "income-assessment-service",
+    ) -> IngestionJob:
+        """
+        Delete all existing points for this service in Qdrant and re-ingest all files fresh.
+        """
+        if self._pipeline is None or self._ingestion is None:
+            self._init_rag()
+
+        # Delete existing points in vector store
+        try:
+            if hasattr(self._pipeline.vector_store, "delete_by_service"):
+                await self._pipeline.vector_store.delete_by_service(service)
+        except Exception as e:
+            pass
+
+        return await self.trigger_ingestion(service=service)
+
+    async def create_course(
+        self,
+        course_data: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Author, write, publish, and index a new Knowledge Cafe course.
+        """
+        import re
+
+        title = course_data.get("title", "").strip()
+        if not title:
+            raise ValueError("Course title cannot be empty.")
+
+        course_id = course_data.get("id") or re.sub(r"[^a-zA-Z0-9]+", "-", title.lower()).strip("-")
+        target_service = course_data.get("target_service") or "income-assessment-service"
+        description = course_data.get("description", "")
+        difficulty = course_data.get("difficulty", "Intermediate")
+        duration = course_data.get("estimated_duration", "45 mins")
+        lessons = course_data.get("lessons", [])
+        if not lessons:
+            raise ValueError("Course must contain at least one lesson.")
+
+        course_dir = _project_root / "rag_service" / "knowledge_cafe" / "courses" / course_id
+        course_dir.mkdir(parents=True, exist_ok=True)
+        lessons_dir = course_dir / "lessons"
+        lessons_dir.mkdir(parents=True, exist_ok=True)
+
+        # Generate course-structure.md
+        lines = [
+            "---",
+            f"id: {course_id}",
+            f"title: {title}",
+            f"description: {description}",
+            f"target_service: {target_service}",
+            f"difficulty: {difficulty}",
+            f"estimated_duration: {duration}",
+            "domain: Engineering & Microservices",
+            "group: technical",
+            "tags:",
+            f"  - {target_service}",
+            "  - team-tutorial",
+            "---\n",
+            f"# {title}\n",
+            f"{description}\n",
+        ]
+
+        for idx, l in enumerate(lessons):
+            l_title = l.get("title", f"Lesson {idx + 1}")
+            l_slug = re.sub(r"[^a-zA-Z0-9]+", "-", l_title.lower()).strip("-")
+            l_id = f"{idx + 1:02d}-{l_slug}"
+            l_summary = l.get("summary", "")
+            l_content = l.get("content", "")
+            quiz = l.get("quiz_questions") or []
+
+            # Write lesson file
+            cur_lesson_dir = lessons_dir / l_id
+            cur_lesson_dir.mkdir(parents=True, exist_ok=True)
+            overview_file = cur_lesson_dir / "overview.md"
+            overview_file.write_text(l_content or f"# {l_title}\n\n{l_summary}", encoding="utf-8")
+
+            lines.append(f"## {idx + 1}. {l_title}\n")
+            lines.append(f"- **Summary**: {l_summary}")
+            lines.append(f"- **Context**:\n  - `lessons/{l_id}/overview.md`\n")
+
+            if quiz:
+                lines.append("- **Knowledge Check**:\n")
+                for q in quiz:
+                    q_text = q.get("question", "")
+                    opts = q.get("options", [])
+                    c_idx = q.get("correct_option_index", 0)
+                    exp = q.get("explanation", "")
+                    lines.append(f"  - **Question**: {q_text}")
+                    lines.append("  - **Type**: multiple_choice")
+                    lines.append("  - **Options**:")
+                    for o_idx, opt in enumerate(opts):
+                        mark = "[x]" if o_idx == c_idx else "[ ]"
+                        lines.append(f"    - {mark} {opt}")
+                    if exp:
+                        lines.append(f"  - **Explanation**: {exp}\n")
+                    else:
+                        lines.append("")
+            lines.append("")
+
+        (course_dir / "course-structure.md").write_text("\n".join(lines), encoding="utf-8")
+
+        # Force indexing into Qdrant knowledge_cafe_collection
+        if self._course_indexer is None:
+            self._init_rag()
+
+        indexed_chunks = 0
+        if self._course_indexer:
+            indexed_chunks = await self._course_indexer.index_course(course_id, force=True)
+
+        return {
+            "id": course_id,
+            "title": title,
+            "description": description,
+            "target_service": target_service,
+            "difficulty": difficulty,
+            "estimated_duration": duration,
+            "total_lessons": len(lessons),
+            "indexed_chunks": indexed_chunks,
+            "message": f"Course '{title}' successfully authored and indexed ({indexed_chunks} chunks).",
+        }
+
 
     async def upload_course_zip(
         self,

@@ -299,3 +299,37 @@ class QdrantVectorStoreAdapter:
             return True
         except Exception as e:
             raise RuntimeError(f"Qdrant delete failed: {e}") from e
+
+    async def delete_by_service(self, service: str) -> bool:
+        """Delete all indexed vectors matching a specific service identifier."""
+        if self._client is None:
+            to_remove = [cid for cid, c in self._memory_chunks.items() if c.metadata.service == service]
+            for cid in to_remove:
+                self._memory_chunks.pop(cid, None)
+            return True
+
+        try:
+            from qdrant_client.http.models import Filter, FieldCondition, MatchValue, FilterSelector
+
+            q_filter = Filter(
+                must=[
+                    FieldCondition(
+                        key="service",
+                        match=MatchValue(value=service),
+                    )
+                ]
+            )
+            loop = asyncio.get_running_loop()
+            await loop.run_in_executor(
+                None,
+                lambda: self._client.delete(
+                    collection_name=self.collection_name,
+                    points_selector=FilterSelector(filter=q_filter),
+                ),
+            )
+            logger.info(f"Successfully purged all points for service '{service}' in '{self.collection_name}'.")
+            return True
+        except Exception as e:
+            logger.error(f"Failed to delete points for service '{service}': {e}")
+            raise RuntimeError(f"Qdrant delete_by_service failed: {e}") from e
+

@@ -378,6 +378,49 @@ export interface EnrollResult {
   current_lesson?: LessonSummary;
 }
 
+export interface CreateServicePayload {
+  id: string;
+  name?: string;
+  description?: string;
+}
+
+export interface QuizQuestionPayload {
+  question: string;
+  options: string[];
+  correct_option_index: number;
+  explanation?: string;
+}
+
+export interface CreateLessonPayload {
+  title: string;
+  summary: string;
+  content?: string;
+  quiz_questions?: QuizQuestionPayload[];
+}
+
+export interface CreateCoursePayload {
+  id?: string;
+  title: string;
+  description: string;
+  target_service: string;
+  difficulty?: string;
+  estimated_duration?: string;
+  lessons: CreateLessonPayload[];
+}
+
+export interface CreateCourseResult {
+  id: string;
+  title: string;
+  description: string;
+  target_service: string;
+  difficulty: string;
+  estimated_duration: string;
+  total_lessons: number;
+  indexed_chunks: number;
+  message: string;
+}
+
+
 
 
 

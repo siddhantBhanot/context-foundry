@@ -12,6 +12,8 @@ from backend_service.app.api.schemas.kt import (
     CompleteLessonResponse,
     CourseDetailResponse,
     CourseSummaryResponse,
+    CreateCourseRequest,
+    CreateCourseResponse,
     DoubtRequest,
     DoubtResponse,
     EnrollResponse,
@@ -38,6 +40,20 @@ async def list_courses(
     user_id = current_user.id if current_user else None
     courses = await kt_service.list_courses(user_id=user_id, group=group)
     return [CourseSummaryResponse(**c) for c in courses]
+
+
+@router.post("/courses", response_model=CreateCourseResponse)
+async def create_course(
+    payload: CreateCourseRequest,
+    current_user: User = Depends(get_current_user),
+    kt_service: KTService = Depends(get_kt_service),
+) -> CreateCourseResponse:
+    """
+    Author, publish, and index a custom Knowledge Cafe tutorial and interactive quiz.
+    """
+    res = await kt_service.create_course(course_data=payload.model_dump(), user_id=current_user.id)
+    return CreateCourseResponse(**res)
+
 
 
 @router.get("/courses/{course_id}", response_model=CourseDetailResponse)

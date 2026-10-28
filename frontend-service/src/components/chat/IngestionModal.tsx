@@ -9,8 +9,10 @@ import {
   FileText,
   FolderArchive,
   Loader2,
+  Plus,
   RefreshCw,
   Sparkles,
+  Trash2,
   UploadCloud,
   X,
 } from 'lucide-react';
@@ -33,17 +35,24 @@ interface IngestionModalProps {
   service: string;
   services?: Microservice[];
   onSuccess?: (result: KnowledgeIngestResponse) => void;
+  onServiceCreated?: (newService: Microservice) => void;
 }
 
 export function IngestionModal({
   isOpen,
   onClose,
   service: initialService,
-  services,
+  services: initialServices,
   onSuccess,
+  onServiceCreated,
 }: IngestionModalProps) {
   const [activeTab, setActiveTab] = useState<'dev-chat' | 'knowledge-cafe'>('dev-chat');
   const [currentService, setCurrentService] = useState<string>(initialService);
+  const [localServices, setLocalServices] = useState<Microservice[]>(initialServices || []);
+  const [isCreatingService, setIsCreatingService] = useState(false);
+  const [newServiceId, setNewServiceId] = useState('');
+  const [newServiceName, setNewServiceName] = useState('');
+  const [isSubmittingService, setIsSubmittingService] = useState(false);
 
   // Dev Chat (Docs) state
   const [docFiles, setDocFiles] = useState<KnowledgeFileInfo[]>([]);
@@ -51,6 +60,7 @@ export function IngestionModal({
   const [selectedDocFile, setSelectedDocFile] = useState<File | null>(null);
   const [isUploadingDoc, setIsUploadingDoc] = useState(false);
   const [isIngestingDocs, setIsIngestingDocs] = useState(false);
+  const [isReindexing, setIsReindexing] = useState(false);
   const [docUploadSuccess, setDocUploadSuccess] = useState<string | null>(null);
   const [docIngestResult, setDocIngestResult] = useState<KnowledgeIngestResponse | null>(null);
   const [docError, setDocError] = useState<string | null>(null);
@@ -170,6 +180,53 @@ export function IngestionModal({
     }
   };
 
+  const handleCreateService = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newServiceId.trim()) return;
+    setIsSubmittingService(true);
+    setDocError(null);
+    try {
+      const created = await apiClient.createService({
+        id: newServiceId.trim(),
+        name: newServiceName.trim() || undefined,
+      });
+      setLocalServices((prev) => {
+        if (prev.some((s) => s.id === created.id)) return prev;
+        return [...prev, created];
+      });
+      setCurrentService(created.id);
+      setIsCreatingService(false);
+      setNewServiceId('');
+      setNewServiceName('');
+      if (onServiceCreated) onServiceCreated(created);
+      await loadFiles(created.id);
+    } catch (err: any) {
+      setDocError(err.message || 'Failed to register microservice');
+    } finally {
+      setIsSubmittingService(false);
+    }
+  };
+
+  const handleTriggerReindex = async () => {
+    if (!window.confirm(`Are you sure you want to clear and re-index all vectors for '${currentService}'?`)) {
+      return;
+    }
+    setIsReindexing(true);
+    setDocError(null);
+    setDocIngestResult(null);
+
+    try {
+      const res = await apiClient.reindexKnowledge(currentService);
+      setDocIngestResult(res);
+      if (onSuccess) onSuccess(res);
+      await loadFiles(currentService);
+    } catch (err: any) {
+      setDocError(err.message || 'Failed to clear and re-index');
+    } finally {
+      setIsReindexing(false);
+    }
+  };
+
   const handleTriggerDocIngestion = async () => {
     setIsIngestingDocs(true);
     setDocError(null);
@@ -186,6 +243,7 @@ export function IngestionModal({
       setIsIngestingDocs(false);
     }
   };
+
 
   const handlePreviewDoc = async (filename: string) => {
     setIsPreviewLoading(true);
@@ -316,28 +374,74 @@ export function IngestionModal({
         {/* ========================================================================= */}
         {activeTab === 'dev-chat' && (
           <div className="space-y-4">
-            {/* Service Selector */}
-            <div className="flex items-center justify-between bg-slate-50 border border-slate-200/80 px-4 py-2.5 rounded-2xl">
-              <span className="text-xs font-semibold text-slate-700">Target Microservice:</span>
-              {services && services.length > 0 ? (
-                <select
-                  value={currentService}
-                  onChange={(e) => {
-                    setCurrentService(e.target.value);
-                    loadFiles(e.target.value);
-                  }}
-                  className="text-xs font-mono font-semibold bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-slate-800 focus:outline-none focus:ring-1 focus:ring-orange-400 cursor-pointer"
-                >
-                  {services.map((s) => (
-                    <option key={s.id} value={s.id}>
-                      {s.name} ({s.id})
-                    </option>
-                  ))}
-                </select>
+            {/* Service Selector & Inline Creation */}
+            <div className="bg-slate-50 border border-slate-200/80 px-4 py-2.5 rounded-2xl">
+              {!isCreatingService ? (
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-semibold text-slate-700">Target Microservice:</span>
+                    <select
+                      value={currentService}
+                      onChange={(e) => {
+                        setCurrentService(e.target.value);
+                        loadFiles(e.target.value);
+                      }}
+                      className="text-xs font-mono font-semibold bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-slate-800 focus:outline-none focus:ring-1 focus:ring-orange-400 cursor-pointer"
+                    >
+                      {localServices.map((s) => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.id})
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsCreatingService(true)}
+                    className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-[#f05a28] hover:bg-orange-50 border border-orange-200 rounded-lg transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" />
+                    <span>New Microservice</span>
+                  </button>
+                </div>
               ) : (
-                <span className="text-xs font-mono font-bold text-slate-800 px-2.5 py-1 bg-white rounded-lg border border-slate-200">
-                  {currentService}
-                </span>
+                <form onSubmit={handleCreateService} className="flex flex-col sm:flex-row items-center gap-2">
+                  <input
+                    type="text"
+                    required
+                    placeholder="service-id (e.g. payment-service)"
+                    value={newServiceId}
+                    onChange={(e) => setNewServiceId(e.target.value)}
+                    className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-800 font-mono placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                  />
+                  <input
+                    type="text"
+                    placeholder="Display Name (optional)"
+                    value={newServiceName}
+                    onChange={(e) => setNewServiceName(e.target.value)}
+                    className="flex-1 bg-white border border-slate-200 rounded-lg px-3 py-1.5 text-xs text-slate-800 placeholder:text-slate-400 focus:outline-none focus:ring-1 focus:ring-orange-400"
+                  />
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="submit"
+                      disabled={isSubmittingService || !newServiceId.trim()}
+                      className="px-3 py-1.5 bg-[#f05a28] hover:bg-[#d94b1c] text-white text-xs font-bold rounded-lg transition-colors disabled:opacity-50 cursor-pointer"
+                    >
+                      {isSubmittingService ? 'Registering...' : 'Add Service'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsCreatingService(false);
+                        setNewServiceId('');
+                        setNewServiceName('');
+                      }}
+                      className="px-2.5 py-1.5 text-xs text-slate-500 hover:text-slate-700 rounded-lg transition-colors cursor-pointer"
+                    >
+                      Cancel
+                    </button>
+                  </div>
+                </form>
               )}
             </div>
 
@@ -552,7 +656,7 @@ export function IngestionModal({
                     <span className="text-sm font-bold text-slate-800">{docIngestResult.total_files}</span>
                   </div>
                   <div className="bg-white p-2 rounded-xl border border-emerald-100">
-                    <span className="text-[10px] text-slate-400 block uppercase">Chunks Embedded (1024-dim)</span>
+                    <span className="text-[10px] text-slate-400 block uppercase">Chunks Embedded (384-dim)</span>
                     <span className="text-sm font-bold text-[#f05a28]">{docIngestResult.total_chunks}</span>
                   </div>
                 </div>
@@ -560,27 +664,48 @@ export function IngestionModal({
             )}
 
             {/* Maintainer Actions Footer */}
-            <div className="pt-2 border-t border-slate-100 flex items-center justify-between">
+            <div className="pt-2 border-t border-slate-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3">
               <div className="text-[11px] text-slate-400 max-w-[280px]">
-                <strong className="text-slate-600">Maintainer Action:</strong> Ingests all staged files into Qdrant using Amazon Titan Embeddings v2.
+                <strong className="text-slate-600">Storage & Embedding:</strong> Qdrant Cloud vector store with FastEmbed 384-dim CPU vectors.
               </div>
-              <button
-                onClick={handleTriggerDocIngestion}
-                disabled={isIngestingDocs}
-                className="flex items-center gap-1.5 px-5 py-2.5 text-xs font-bold bg-[#f05a28] hover:bg-[#d94b1c] text-white rounded-full shadow-xs transition-all cursor-pointer disabled:opacity-50"
-              >
-                {isIngestingDocs ? (
-                  <>
-                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                    <span>Indexing Vector Store...</span>
-                  </>
-                ) : (
-                  <>
-                    <RefreshCw className="w-3.5 h-3.5" />
-                    <span>Trigger Ingestion</span>
-                  </>
-                )}
-              </button>
+              <div className="flex items-center gap-2 self-end sm:self-auto">
+                <button
+                  type="button"
+                  onClick={handleTriggerReindex}
+                  disabled={isIngestingDocs || isReindexing}
+                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-semibold text-rose-600 hover:bg-rose-50 border border-rose-200 rounded-full transition-colors cursor-pointer disabled:opacity-50"
+                  title="Wipe previous Qdrant vectors for this microservice and re-index from scratch"
+                >
+                  {isReindexing ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Re-indexing...</span>
+                    </>
+                  ) : (
+                    <>
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Clear & Re-index</span>
+                    </>
+                  )}
+                </button>
+                <button
+                  onClick={handleTriggerDocIngestion}
+                  disabled={isIngestingDocs || isReindexing}
+                  className="flex items-center gap-1.5 px-5 py-2.5 text-xs font-bold bg-[#f05a28] hover:bg-[#d94b1c] text-white rounded-full shadow-xs transition-all cursor-pointer disabled:opacity-50"
+                >
+                  {isIngestingDocs ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      <span>Indexing Vector Store...</span>
+                    </>
+                  ) : (
+                    <>
+                      <RefreshCw className="w-3.5 h-3.5" />
+                      <span>Trigger Ingestion</span>
+                    </>
+                  )}
+                </button>
+              </div>
             </div>
           </div>
         )}

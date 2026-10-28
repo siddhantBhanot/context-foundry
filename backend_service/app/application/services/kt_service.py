@@ -670,3 +670,14 @@ class KTService:
             "course_id": course_id,
         }
 
+    async def create_course(
+        self,
+        course_data: Dict[str, Any],
+        user_id: Optional[str] = None,
+    ) -> Dict[str, Any]:
+        """
+        Author and publish a custom Knowledge Cafe tutorial and index into Qdrant.
+        """
+        return await self.rag_client.create_course(course_data)
+
+

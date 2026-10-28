@@ -87,6 +87,13 @@ class Database:
                     completed_at TEXT
                 );
 
+                CREATE TABLE IF NOT EXISTS registered_services (
+                    id TEXT PRIMARY KEY,
+                    name TEXT NOT NULL,
+                    description TEXT,
+                    created_at TEXT NOT NULL
+                );
+
                 CREATE TABLE IF NOT EXISTS kt_course_enrollments (
                     id TEXT PRIMARY KEY,
                     user_id TEXT NOT NULL,

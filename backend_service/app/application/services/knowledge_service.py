@@ -69,6 +69,29 @@ class KnowledgeService:
             "completed_at": job.completed_at.isoformat() if job.completed_at else None,
         }
 
+    async def reindex(
+        self,
+        service: str = "income-assessment-service",
+    ) -> Dict[str, Any]:
+        cleaned_service = service.strip()
+        if not cleaned_service:
+            raise ValidationException("service identifier cannot be empty.")
+
+        job = await self.rag_client.reindex_service(service=cleaned_service)
+        return {
+            "job_id": job.id,
+            "service": job.service,
+            "status": job.status.value,
+            "source_path": job.source_path,
+            "total_files": job.total_files,
+            "total_chunks": job.total_chunks,
+            "files_indexed": job.files_indexed,
+            "error_message": job.error_message,
+            "created_at": job.created_at.isoformat(),
+            "completed_at": job.completed_at.isoformat() if job.completed_at else None,
+        }
+
+
     async def upload_course(
         self,
         file_name: str,
