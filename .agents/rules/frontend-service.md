@@ -8,14 +8,17 @@ globs: frontend-service/**
 ## 1. Scope
 
 `frontend-service` is the developer-facing web application for the
-Engineering Intelligence Platform.
+ContextFoundry Engineering Intelligence Platform.
 
-For the MVP, support only:
+It supports:
 
-`income-assessment-service`
+-   Dynamic microservice selection and creation
+-   Source code (.kt, .kts) and documentation (.md, .pdf, .zip) ingestion
+-   Microservice-grounded streaming chat with exact line citations
+-   Interactive Knowledge Cafe: course enrollment, lesson synthesis, doubt drawer, and tutorial authoring
 
 The frontend must communicate with the backend API only. Never call
-Amazon Bedrock, Qdrant, or other privileged infrastructure directly from
+Qdrant, Groq, Bedrock, or other privileged infrastructure directly from
 the browser.
 
 ------------------------------------------------------------------------
@@ -25,15 +28,13 @@ the browser.
 Use:
 
 -   React 19
--   TypeScript
+-   TypeScript (strict typing, avoid `any`)
 -   Vite
 -   Tailwind CSS v4
 -   Lucide React & Mermaid.js
--   Tailwind CSS where useful
+-   React Markdown & Syntax Highlighter
 
-Prefer functional components and React hooks.
-
-Use strict TypeScript. Avoid `any` unless justified.
+Prefer functional components and clean React hooks.
 
 Do not add unnecessary libraries or frameworks.
 
@@ -41,24 +42,20 @@ Do not add unnecessary libraries or frameworks.
 
 ## 3. UI / UX
 
-The application should feel like a clean, professional
-**engineering/developer tool**, not a generic AI chatbot.
+The application should feel like a clean, high-performance
+**engineering intelligence tool**, not a generic AI chatbot.
 
-The homepage should take visual inspiration from:
+Visual aesthetic:
 
-Modern enterprise developer portals, using warm orange (#f05a28) for Dev Central and deep burgundy (#861f41) for Saathi.
+-   Palette: Warm developer orange (`#f05a28`), modern slate tones, clean dark accents
+-   Clean, minimal information density with clear typography
+-   Subtle micro-animations, fast transitions, and instant feedback
+-   First-class code presentation: syntax highlighting, file paths, line ranges, and auto-rendered Mermaid diagrams
+-   Grounded source citation cards allowing users to view the exact ingested source code or document snippet in a modal
 
-Do not copy the site literally.
-
-Prioritize:
-
--   Clean, minimal layout
--   Professional typography
--   Fast interactions
--   Good information hierarchy
--   Developer-friendly code/source presentation
-
-The homepage should make the chat/query experience the primary focus.
+The primary layout provides two dedicated modes:
+1. **Dev Central Chat**: Interactive conversational code & architecture exploration
+2. **Knowledge Cafe**: Structured onboarding curricula, module roadmaps, live quizzes, and tutorial creation
 
 ------------------------------------------------------------------------
 
@@ -107,31 +104,36 @@ The chat experience must remain the primary focus.
 
 ------------------------------------------------------------------------
 
-## 6. Service Selector
+## 6. Service Selector & Dynamic Management
 
-Provide a microservice dropdown.
+Provide a microservice dropdown with dynamic creation capabilities.
 
-Default:
+Default initial service:
 
 ``` text
 income-assessment-service
 ```
 
-Design it so additional services can be added later without changing
-component logic.
+Users must be able to:
+- Select any active microservice from the dropdown.
+- Add a new microservice dynamically via "+ New Microservice" in the header or ingestion modal.
+- Upload code and documentation (.kt, .kts, .md, .pdf, .zip) targeted specifically at that microservice.
+- View staged files vs indexed files, with clear status indicators.
+- Trigger ingestion and clean re-indexing.
 
 Prefer a centralized model:
 
 ``` typescript
-type Microservice = {
+export interface Microservice {
   id: string;
   name: string;
   description?: string;
-};
+  has_indexed_data?: boolean;
+  doc_count?: number;
+}
 ```
 
-The selected service must be included in every query sent to the
-backend.
+The selected service must be included in every chat query sent to the backend.
 
 ------------------------------------------------------------------------
 
@@ -170,7 +172,7 @@ Keep API response/request types explicit.
 Primary endpoint:
 
 ``` text
-POST /api/query
+POST /api/v1/query/stream
 ```
 
 Chat responses must stream using **Server-Sent Events (SSE)**.
@@ -386,29 +388,32 @@ Keep feedback unobtrusive.
 
 ------------------------------------------------------------------------
 
-## 17. Add to Knowledge Base
+## 17. Microservice Knowledge Ingestion & Re-indexing
 
-Provide an MVP `Add to Knowledge Base` workflow with:
+Provide an `IngestionModal` workflow for microservice knowledge management:
 
-``` text
-Confluence URL
-Microservice
-Change Type
-Short Summary
-```
+1. **Target Microservice**:
+   - Current active microservice pre-selected.
+   - Quick action to create a new microservice context on the fly.
 
-The operation is asynchronous.
+2. **Supported File Formats**:
+   - Kotlin source files (`.kt`, `.kts`)
+   - Markdown documents (`.md`, `.markdown`)
+   - PDF documents (`.pdf`)
+   - ZIP archives containing code and documentation (`.zip`)
 
-Show:
+3. **Staging & Review**:
+   - Drag-and-drop or file picker with format validation.
+   - List of staged files with file size, extension badge, and individual removal.
+   - Comparison of staged vs currently indexed files.
 
-``` text
-Queued
-Processing
-Completed
-Failed
-```
+4. **Actions**:
+   - `Ingest Staged Files`: Triggers semantic chunking, embedding via FastEmbed, and upserting vectors into Qdrant Cloud under `service == service_id`.
+   - `Clear & Re-index`: Wipes all existing Qdrant points for this microservice and re-indexes the uploaded files from scratch.
 
-Do not make the user wait for the complete ingestion process.
+5. **Progress & Feedback**:
+   - Real-time progress indicators: `Uploading...`, `Chunking & Embedding...`, `Completed`.
+   - Empty-state banner on main chat when a service has `doc_count === 0`, guiding users to upload files.
 
 ------------------------------------------------------------------------
 
@@ -585,3 +590,27 @@ Prioritize:
 
 Features such as source viewer, conversation rename/delete, and advanced
 ingestion status are secondary if time is limited.
+
+------------------------------------------------------------------------
+
+## 26. Knowledge Cafe & Tutorial Authoring
+
+Knowledge Cafe serves as the structured onboarding and learning environment for developers and teams.
+
+Key capabilities:
+1. **Curriculum Browsing**:
+   - Filter tutorials by target microservice or difficulty (Beginner, Intermediate, Advanced).
+   - Display completion status, enrolled timestamp, and quiz scores.
+
+2. **Interactive Lesson Studio**:
+   - Progressive lesson content synthesis streamed via SSE.
+   - Live Mermaid diagram generation for architectural flows.
+   - In-lesson doubt drawer (`POST /api/v1/kt/courses/{id}/lessons/{id}/doubts/stream`) allowing contextual follow-ups without leaving the lesson.
+   - Interactive end-of-lesson knowledge-check quizzes with immediate feedback.
+
+3. **Tutorial Creation & Publishing**:
+   - Form-based creator allowing users and team members to author custom courses.
+   - Define course title, description, target microservice, difficulty, and structured modules/lessons.
+   - Interactive quiz editor for multiple-choice questions with answer explanations.
+   - Direct publication to `knowledge_cafe_collection` via `POST /api/v1/kt/courses`.
+

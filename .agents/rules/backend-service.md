@@ -7,16 +7,24 @@ globs: backend_service/app/**
 
 ## 1. Service Responsibility
 
-`backend_service` is responsible for the application's backend API and
-application-level orchestration.
+`backend_service` is responsible for the application's backend API,
+application-level orchestration, user authentication, and data persistence.
 
-It should provide a clean API boundary between the frontend and the
-underlying RAG/infrastructure services.
+It serves as the engineering intelligence hub for an individual developer
+or small team, managing:
 
-The backend must not contain frontend-specific logic.
+-   Authentication & user sessions (PBKDF2-HMAC-SHA256 & JWT)
+-   Dynamic microservice registration and lifecycle management
+-   Document & source code upload staging (.kt, .kts, .md, .pdf, .zip)
+-   Triggering RAG indexing and re-indexing into vector storage
+-   Real-time grounded query streaming (SSE) with line-level citations
+-   Knowledge Cafe tutorial authoring, publishing, enrollment, and quizzes
+
+It must provide a clean API boundary between the frontend and the
+underlying RAG/vector infrastructure.
 
 The backend must not directly expose provider-specific implementation
-details to the frontend.
+details (Qdrant, Groq, Bedrock) to the frontend.
 
 ------------------------------------------------------------------------
 
@@ -24,31 +32,40 @@ details to the frontend.
 
 Use:
 
--   Python
+-   Python 3.12+
 -   FastAPI
--   Pydantic
--   AsyncIO where appropriate
+-   Pydantic v2 & Pydantic-Settings
+-   AsyncIO / aiosqlite for persistence
+-   Uvicorn
 
-Follow idiomatic Python practices.
-
-Use type hints throughout the codebase.
+Follow idiomatic Python practices and strict type annotations.
 
 ------------------------------------------------------------------------
 
 # 3. Backend Structure
 
-Prefer a structure similar to:
+Prefer a clean hexagonal structure:
 
 ``` text
 backend_service/
 ├── app/
 │   ├── api/
 │   │   ├── routes/
+│   │   │   ├── auth.py
+│   │   │   ├── services.py
+│   │   │   ├── knowledge.py
+│   │   │   ├── query.py
+│   │   │   ├── kt.py
+│   │   │   ├── feedback.py
+│   │   │   └── health.py
 │   │   └── schemas/
 │   │
 │   ├── application/
-│   │   ├── services/
-│   │   └── use_cases/
+│   │   └── services/
+│   │       ├── auth_service.py
+│   │       ├── knowledge_service.py
+│   │       ├── kt_service.py
+│   │       └── ...
 │   │
 │   ├── domain/
 │   │   ├── models/
@@ -57,47 +74,77 @@ backend_service/
 │   │
 │   ├── infrastructure/
 │   │   ├── clients/
+│   │   │   └── direct_rag_client.py
 │   │   ├── persistence/
+│   │   │   └── sqlite_repositories.py
+│   │   ├── security/
+│   │   │   └── jwt_handler.py
 │   │   └── configuration/
+│   │       └── settings.py
 │   │
 │   └── main.py
 │
+├── data/
+│   └── contextfoundry.db
 ├── Dockerfile
 ├── requirements.txt
 └── ...
 ```
 
-The exact structure may evolve, but responsibilities must remain clearly
-separated.
+Uploaded files and staging assets should be placed in a dedicated persistent
+data directory (e.g. `data/storage/services/<service_id>/`), rather than within
+the application code tree.
 
 ------------------------------------------------------------------------
 
 # 4. API Design
 
-Use REST APIs with explicit request/response schemas.
+Use REST APIs with explicit Pydantic request/response schemas.
 
-Prefer versioned APIs:
+Version all endpoints under:
 
 ``` text
 /api/v1/...
 ```
 
-Expected endpoints include:
+Expected endpoint groups include:
 
 ``` text
-POST /api/v1/query
-POST /api/v1/feedback
-POST /api/v1/knowledge
+# Authentication
+POST /api/v1/auth/signup
+POST /api/v1/auth/login
+GET  /api/v1/auth/me
+
+# Microservice Management
+GET  /api/v1/services
+POST /api/v1/services
+
+# Knowledge Ingestion & Staging
+POST /api/v1/knowledge/upload          # Upload .kt, .kts, .md, .pdf, or .zip
+GET  /api/v1/knowledge/files           # Staged and ingested files per service
+POST /api/v1/knowledge                 # Trigger semantic chunking & indexing
+POST /api/v1/knowledge/reindex         # Clean and re-index a service
+
+# Grounded Q&A
+POST /api/v1/query/stream              # Real-time SSE streaming with citations
+
+# Knowledge Cafe (Tutorials & Quizzes)
+GET  /api/v1/kt/courses                # Browse courses with enrollment progress
+POST /api/v1/kt/courses                # Create and publish a new tutorial
+GET  /api/v1/kt/courses/{id}           # Full curriculum roadmap
+POST /api/v1/kt/courses/{id}/enroll    # Enroll or resume
+GET  /api/v1/kt/courses/{id}/lessons/{id}/stream # Stream lesson synthesis
+POST /api/v1/kt/courses/{id}/lessons/{id}/doubts/stream # In-lesson Q&A
+POST /api/v1/kt/courses/{id}/lessons/{id}/check  # Interactive quiz grading
+POST /api/v1/knowledge/course/upload   # Upload course zip bundle
+
+# Health & Feedback
 GET  /api/v1/health
+POST /api/v1/feedback
 ```
 
-The backend should own API contracts. Do not expose internal provider
+The backend must own API contracts. Do not expose internal provider
 classes or SDK response objects directly.
-
-For example, the frontend should not need to know whether the RAG system
-uses Bedrock, Gemini, Groq, or another provider.
-
-------------------------------------------------------------------------
 
 # 5. Dependency Injection
 

@@ -2,7 +2,7 @@
 
 ## 1. Project Objective
 
-This project is an internal **Engineering Intelligence Platform for
+This project is a personal and small-team **Engineering Intelligence Platform for
 Microservices**.
 
 The platform is composed of multiple independently responsible services,
@@ -12,13 +12,19 @@ including:
 -   `rag_service`
 -   `frontend-service`
 
-The architecture must remain modular so that additional microservices,
-LLM providers, embedding providers, vector databases, and knowledge
-sources can be added later without significant changes to unrelated
-components.
+The architecture is tailored for individual developers or small engineering teams
+who need grounded intelligence, architectural exploration, and onboarding tutorials
+across their microservices.
 
-Do not over-engineer the MVP. Prefer simple, production-quality
-abstractions over speculative infrastructure.
+Core Workflows:
+1. User Authentication & Session Management
+2. Dynamic Microservice Management & Isolation
+3. Microservice-Specific Knowledge Ingestion (.kt, .kts, .md, .pdf, .zip)
+4. Grounded Real-Time Q&A with Line-Level Source Citations
+5. Knowledge Cafe Tutorial & Quiz Authoring and Interactive Learning
+
+Do not over-engineer the application. Prefer simple, robust, production-quality
+abstractions over speculative enterprise infrastructure.
 
 ------------------------------------------------------------------------
 
@@ -227,17 +233,17 @@ spreading provider-specific logic across the codebase.
 
 ------------------------------------------------------------------------
 
-# 11. MVP Discipline
+# 11. Engineering Discipline & Focus
 
-This is a hackathon project with a short implementation timeline.
+This project is tailored for individual developers and small engineering teams.
 
 Prioritize:
 
 1.  Working end-to-end functionality
-2.  Correctness
-3.  Good developer/user experience
-4.  Clean modular architecture
-5.  Dockerized local execution
+2.  Correctness and source grounding
+3.  Clean developer experience & UI/UX
+4.  Modular, hexagonal architecture
+5.  Dockerized and local execution
 
 Do NOT prematurely introduce:
 
