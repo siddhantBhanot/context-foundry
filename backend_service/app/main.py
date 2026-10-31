@@ -61,10 +61,11 @@ def create_app() -> FastAPI:
     # 1. Attach Request ID Middleware
     app.add_middleware(RequestIdMiddleware)
 
-    # 2. Configure CORS
+    # 2. Configure CORS (Supports explicit origins, plus onrender/vercel/koyeb wildcard domains)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.cors_origins,
+        allow_origin_regex=r"https://.*\.onrender\.com|https://.*\.vercel\.app|https://.*\.koyeb\.app|http://localhost:.*",
         allow_credentials=True,
         allow_methods=["*"],
         allow_headers=["*"],
