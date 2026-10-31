@@ -264,6 +264,10 @@ export const DocumentViewerModal: React.FC<DocumentViewerModalProps> = ({
                 <div className="max-w-none">
                   {fileName.toLowerCase().endsWith('.kt') || fileName.toLowerCase().endsWith('.kts') ? (
                     <MarkdownRenderer content={`\`\`\`kotlin\n${docData.content}\n\`\`\``} />
+                  ) : fileName.toLowerCase().endsWith('.java') ? (
+                    <MarkdownRenderer content={`\`\`\`java\n${docData.content}\n\`\`\``} />
+                  ) : fileName.toLowerCase().endsWith('.py') ? (
+                    <MarkdownRenderer content={`\`\`\`python\n${docData.content}\n\`\`\``} />
                   ) : (
                     <MarkdownRenderer content={docData.content} />
                   )}

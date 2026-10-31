@@ -31,13 +31,18 @@ export function SourceCitationList({ sources, service }: SourceCitationListProps
         {sources.map((src, i) => {
           const isExpanded = expandedIndex === i;
           const fileName = src.file.split('/').pop() || src.file;
-          const isKotlin =
+          const isCode =
             fileName.endsWith('.kt') ||
             fileName.endsWith('.kts') ||
+            fileName.endsWith('.java') ||
+            fileName.endsWith('.py') ||
             src.doc_type === 'kotlin' ||
+            src.doc_type === 'java' ||
+            src.doc_type === 'python' ||
+            src.doc_type === 'source_code' ||
             src.docType === 'Kotlin Source';
           const isDoc =
-            !isKotlin &&
+            !isCode &&
             (fileName.endsWith('.md') ||
               fileName.endsWith('.markdown') ||
               fileName.endsWith('.txt') ||
@@ -66,7 +71,7 @@ export function SourceCitationList({ sources, service }: SourceCitationListProps
                 <div className="flex items-center gap-2 min-w-0 flex-1">
                   {/* File Icon */}
                   <div className="w-5 h-5 rounded-md flex items-center justify-center shrink-0">
-                    {isKotlin ? (
+                    {isCode ? (
                       <FileCode className="w-3.5 h-3.5 text-[#f05a28]" />
                     ) : (
                       <BookOpen className="w-3.5 h-3.5 text-indigo-500" />
@@ -105,24 +110,24 @@ export function SourceCitationList({ sources, service }: SourceCitationListProps
                 </div>
 
                 <div className="flex items-center gap-2 pl-2">
-                  {/* View Document Button (Only for Documentation files, NOT for Code files) */}
-                  {isDoc && (
+                  {/* View Source / Document Button */}
+                  {(isDoc || isCode) && (
                     <button
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation();
                         setActiveDoc({
-                          service: src.service || service || 'income-assessment-service',
+                          service: src.service || service || 'spring-boot-realworld',
                           file: src.file,
                           startLine,
                           endLine,
                         });
                       }}
                       className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium text-[#f05a28] bg-orange-50 hover:bg-orange-100 border border-orange-200 transition-colors cursor-pointer shadow-2xs shrink-0"
-                      title="View full source document in browser"
+                      title="View full source file in browser"
                     >
-                      <BookOpen className="w-3 h-3" />
-                      <span>View Doc</span>
+                      {isCode ? <FileCode className="w-3 h-3" /> : <BookOpen className="w-3 h-3" />}
+                      <span>{isCode ? 'View Code' : 'View Doc'}</span>
                     </button>
                   )}
 

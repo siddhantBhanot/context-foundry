@@ -19,8 +19,8 @@ across their microservices.
 Core Workflows:
 1. User Authentication & Session Management
 2. Dynamic Microservice Management & Isolation
-3. Microservice-Specific Knowledge Ingestion (.kt, .kts, .md, .pdf, .zip)
-4. Grounded Real-Time Q&A with Line-Level Source Citations
+3. Microservice-Specific Knowledge Ingestion (.kt, .kts, .java, .py, .md, .pdf, .zip) with Structural Scope Headers & RepoMap Generation
+4. Grounded Real-Time Q&A with Hybrid Search (Dense + BM25 RRF), 1-Hop Dependency Expansion, and Line-Level Source Citations
 5. Knowledge Cafe Tutorial & Quiz Authoring and Interactive Learning
 
 Do not over-engineer the application. Prefer simple, robust, production-quality

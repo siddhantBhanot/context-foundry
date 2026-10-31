@@ -32,8 +32,8 @@ Keep RAG-specific implementation out of the frontend.
 Use:
 
 -   Python 3.12+
--   Qdrant Cloud (primary vector storage with payload filtering)
--   Qdrant FastEmbed (`sentence-transformers/all-MiniLM-L6-v2`, 384-dim) for fast local embeddings with zero cloud API keys
+-   Qdrant Cloud (primary vector storage with Hybrid Dense + Sparse BM25 RRF search & payload filtering)
+-   Qdrant FastEmbed (`jinaai/jina-embeddings-v2-base-code`, 768-dim, 8192-token context + `Qdrant/bm25` sparse vectors) for fast local code-aware embeddings with zero cloud API keys
 -   Groq Cloud (OpenAI-compatible high-speed inference) as primary LLM provider
 -   LlamaIndex Core
 -   PyPDF for document parsing
@@ -162,21 +162,20 @@ Users can create new microservices and ingest code and documentation on demand.
 
 Supported Ingestion Formats:
 
-1.  **Kotlin Source Code (`.kt`, `.kts`)**:
-    Parsed via `KotlinChunker`, extracting package, class, interface, method,
-    annotations, and exact line ranges (`#L{start}-L{end}`).
+1.  **Kotlin, Java, and Python Source Code (`.kt`, `.kts`, `.java`, `.py`)**:
+    Parsed via multi-language structural chunkers (`KotlinChunker`, `JavaChunker`, `PythonChunker`), extracting package/module, imports, class/interface definitions, constructor/field dependencies, methods/functions, HTTP endpoints/decorators, and exact line ranges (`#L{start}-L{end}`). Prepend compact structural scope headers (`File | Package | Imports | Collaborators`) to each chunk.
 
 2.  **Markdown Documentation (`.md`, `.markdown`)**:
-    Parsed via `MarkdownChunker`, preserving heading hierarchy (`#`, `##`, `###`),
-    code blocks, and section context.
+    Uploaded user-written or repository Markdown files parsed via `MarkdownChunker`, preserving heading hierarchy (`#`, `##`, `###`), code blocks, and section context.
 
 3.  **PDF Documents (`.pdf`)**:
-    Parsed via `PyPDF`, formatted into paginated Markdown (`## Page N`), and
-    processed into contextual chunks.
+    Parsed via `PyPDF`, formatted into paginated Markdown (`## Page N`), and processed into contextual chunks.
 
 4.  **ZIP Archives (`.zip`)**:
-    Unpacked safely (with zip-bomb byte/entry checks and path traversal protection),
-    recursively extracting all inner `.kt`, `.kts`, `.md`, and `.pdf` files.
+    Unpacked safely (with zip-bomb byte/entry checks and path traversal protection), recursively extracting all inner `.kt`, `.kts`, `.java`, `.py`, `.md`, and `.pdf` files.
+
+5.  **Microservice RepoMap & Dependency Graph (`_repo_map.json`)**:
+    Automatically synthesized during ingestion to provide a holistic blueprint of all files, classes, endpoints, Markdown sections, and cross-component dependencies, powering macro-level architectural context and 1-hop dependency expansion during retrieval.
 
 Every chunk must be tagged with its corresponding `service` identifier.
 

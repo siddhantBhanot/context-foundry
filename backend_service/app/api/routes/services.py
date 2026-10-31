@@ -12,7 +12,6 @@ from backend_service.app.infrastructure.persistence.database import Database, ge
 
 _project_root = Path(__file__).resolve().parents[4]
 _storage_dir = _project_root / "backend_service" / "data" / "storage" / "services"
-_sample_data_dir = _project_root / "rag_service" / "sample_data"
 
 router = APIRouter(prefix="/services", tags=["Services"])
 
@@ -36,58 +35,29 @@ async def list_available_services(
     db: Database = Depends(get_database),
 ) -> List[ServiceInfo]:
     """
-    List supported microservices, aggregating registered services from SQLite,
-    dedicated storage, and legacy sample directories.
+    List registered microservices from SQLite and dedicated user storage.
     """
-    allowed_suffixes = {".md", ".markdown", ".pdf", ".kt", ".kts"}
+    allowed_suffixes = {".md", ".markdown", ".pdf", ".kt", ".kts", ".java", ".py"}
     services_map = {}
 
-    # 1. Default initial services
-    defaults = [
-        ServiceInfo(
-            id="income-assessment-service",
-            name="income-assessment-service",
-            description="Income assessment rules engine & eligibility calculations",
-            has_indexed_data=True,
-            doc_count=3,
-        ),
-        ServiceInfo(
-            id="loan-origination-service",
-            name="loan-origination-service",
-            description="Loan application lifecycle & underwriting workflows",
-            has_indexed_data=False,
-            doc_count=0,
-        ),
-        ServiceInfo(
-            id="kyc-verification-service",
-            name="kyc-verification-service",
-            description="Identity verification & document assessment",
-            has_indexed_data=False,
-            doc_count=0,
-        ),
-    ]
-    for s in defaults:
-        services_map[s.id] = s
-
-    # 2. Load registered services from database
+    # 1. Load registered services from database
     try:
         async with db.connection() as conn:
-            cursor = await conn.execute("SELECT id, name, description FROM registered_services")
+            cursor = await conn.execute("SELECT id, name, description FROM registered_services ORDER BY created_at ASC")
             rows = await cursor.fetchall()
             for row in rows:
                 sid = row["id"]
-                if sid not in services_map:
-                    services_map[sid] = ServiceInfo(
-                        id=sid,
-                        name=row["name"] or sid,
-                        description=row["description"] or f"Microservice {sid}",
-                        has_indexed_data=False,
-                        doc_count=0,
-                    )
+                services_map[sid] = ServiceInfo(
+                    id=sid,
+                    name=row["name"] or sid,
+                    description=row["description"] or f"Microservice {sid}",
+                    has_indexed_data=False,
+                    doc_count=0,
+                )
     except Exception:
         pass
 
-    # 3. Helper to count non-pending valid files in a directory
+    # 2. Helper to count non-pending valid files in a directory
     def count_service_files(dir_path: Path) -> set:
         found_names = set()
         if dir_path.is_dir():
@@ -96,20 +66,16 @@ async def list_available_services(
                     found_names.add(f.name)
         return found_names
 
-    # 4. Scan dedicated storage and sample_data
-    all_service_ids = set(services_map.keys())
-    for parent in [_storage_dir, _sample_data_dir]:
-        if parent.exists():
-            for child in parent.iterdir():
-                if child.is_dir() and not child.name.startswith("."):
-                    all_service_ids.add(child.name)
+    # 3. Scan dedicated storage
+    all_service_ids = list(services_map.keys())
+    if _storage_dir.exists():
+        for child in sorted(_storage_dir.iterdir()):
+            if child.is_dir() and not child.name.startswith(".") and child.name not in services_map:
+                all_service_ids.append(child.name)
 
-    # 5. Populate and calculate document counts
+    # 4. Populate and calculate document counts
     for sid in all_service_ids:
-        files_set = set()
-        files_set.update(count_service_files(_storage_dir / sid))
-        files_set.update(count_service_files(_sample_data_dir / sid))
-
+        files_set = count_service_files(_storage_dir / sid)
         doc_count = len(files_set)
         has_data = doc_count > 0
 

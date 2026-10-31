@@ -36,62 +36,41 @@ import type { ChatMessage, Microservice, ModelInfo } from '@/types';
 import { ContextFoundryLogo } from '@/components/brand/ContextFoundryLogo';
 
 
-const DEFAULT_SERVICES: Microservice[] = [
-  {
-    id: 'income-assessment-service',
-    name: 'income-assessment-service',
-    description: 'Income assessment rules engine & eligibility calculations',
-    has_indexed_data: true,
-  },
-  {
-    id: 'loan-origination-service',
-    name: 'loan-origination-service',
-    description: 'Loan application lifecycle & underwriting workflows',
-    has_indexed_data: false,
-  },
-  {
-    id: 'kyc-verification-service',
-    name: 'kyc-verification-service',
-    description: 'Identity verification & document assessment',
-    has_indexed_data: false,
-  },
-];
-
 const FEATURE_CARDS = [
   {
     id: 'apis',
     icon: Code2,
     title: 'APIs',
     description: 'Endpoints, params, auth, and response schemas across every service.',
-    query: 'What are the main endpoints and auth schemas for this service?',
+    query: 'What are the main endpoints, request parameters, and response schemas exposed by this service?',
   },
   {
     id: 'business-logic',
     icon: GitBranch,
     title: 'Business logic',
-    description: 'How rules, eligibility, and calculations are evaluated under the hood.',
-    query: 'What is the business handler for FOUR_WHEELER_PERSONAL and what endpoint does it expose?',
+    description: 'How rules, domain models, and calculations are evaluated under the hood.',
+    query: 'How is the core domain logic and validation implemented in this service?',
   },
   {
     id: 'request-flows',
     icon: GitMerge,
     title: 'Request flows',
     description: 'Trace a request end-to-end, including retries, queues, and callbacks.',
-    query: 'What is the usual request flow for income-assessment-service?',
+    query: 'Walk me through the end-to-end request execution flow and state transitions for this service.',
   },
   {
     id: 'integrations',
     icon: Layers,
     title: 'Integrations',
     description: 'Third-party connections, webhooks, and cross-service dependencies.',
-    query: 'What is Zenith and what is it used for?',
+    query: 'What external services, databases, or downstream APIs does this service integrate with?',
   },
 ];
 
 function DashboardApp() {
   const { user, isAuthenticated, isLoading: isAuthLoading, logout } = useAuth();
-  const [services, setServices] = useState<Microservice[]>(DEFAULT_SERVICES);
-  const [selectedService, setSelectedService] = useState<string>(DEFAULT_SERVICES[0].id);
+  const [services, setServices] = useState<Microservice[]>([]);
+  const [selectedService, setSelectedService] = useState<string>('');
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [queryInput, setQueryInput] = useState<string>('');
@@ -122,7 +101,7 @@ function DashboardApp() {
     isOpen: boolean;
     file: string;
     service: string;
-  }>({ isOpen: false, file: '', service: 'income-assessment-service' });
+  }>({ isOpen: false, file: '', service: '' });
 
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -148,11 +127,15 @@ function DashboardApp() {
 
       try {
         const remoteServices = await apiClient.listServices();
-        if (remoteServices && remoteServices.length > 0) {
+        if (remoteServices) {
           setServices(remoteServices);
+          setSelectedService((prev) => {
+            if (prev && remoteServices.some((s) => s.id === prev)) return prev;
+            return remoteServices.length > 0 ? remoteServices[0].id : '';
+          });
         }
       } catch {
-        // Keep default services if fetch fails
+        // Keep current services if fetch fails
       }
 
       try {
@@ -640,8 +623,33 @@ function DashboardApp() {
                 <span className="font-semibold text-slate-700">integrations</span> — straight from your service documentation.
               </p>
 
-              {/* Empty State Banner if no files are ingested for the selected service */}
+              {/* Empty State Banner if no microservices or no files are ingested for the selected service */}
               {(() => {
+                if (services.length === 0) {
+                  return (
+                    <div className="w-full mb-5 p-4 rounded-2xl bg-orange-50/90 border border-orange-200/90 text-left flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 rounded-xl bg-white text-[#f05a28] shadow-2xs shrink-0 mt-0.5 sm:mt-0">
+                          <UploadCloud className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-xs text-slate-900">
+                            No microservices registered yet
+                          </h4>
+                          <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                            Register your first microservice and upload Kotlin (<code className="font-mono text-slate-700">.kt</code>), Java (<code className="font-mono text-slate-700">.java</code>), Python (<code className="font-mono text-slate-700">.py</code>), Markdown (<code className="font-mono text-slate-700">.md</code>), PDF (<code className="font-mono text-slate-700">.pdf</code>), or a ZIP archive.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setIsIngestionModalOpen(true)}
+                        className="px-4 py-2 bg-[#f05a28] hover:bg-[#d94b1c] text-white text-xs font-bold rounded-xl shadow-2xs transition-colors shrink-0 cursor-pointer"
+                      >
+                        + Add Microservice
+                      </button>
+                    </div>
+                  );
+                }
                 const activeSvc = services.find((s) => s.id === selectedService);
                 const hasDocs = activeSvc ? (activeSvc.doc_count !== undefined ? activeSvc.doc_count > 0 : activeSvc.has_indexed_data) : true;
                 if (!hasDocs) {
@@ -656,7 +664,7 @@ function DashboardApp() {
                             No knowledge indexed yet for <span className="font-mono text-[#f05a28]">{selectedService}</span>
                           </h4>
                           <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
-                            Upload Kotlin source (<code className="font-mono text-slate-700">.kt</code>, <code className="font-mono text-slate-700">.kts</code>), Markdown (<code className="font-mono text-slate-700">.md</code>), PDF (<code className="font-mono text-slate-700">.pdf</code>), or a ZIP archive to ground the AI.
+                            Upload Kotlin (<code className="font-mono text-slate-700">.kt</code>), Java (<code className="font-mono text-slate-700">.java</code>), Python (<code className="font-mono text-slate-700">.py</code>), author custom Markdown (<code className="font-mono text-slate-700">.md</code>), or upload a PDF/ZIP archive to ground the AI.
                           </p>
                         </div>
                       </div>
@@ -682,7 +690,7 @@ function DashboardApp() {
                     </span>
                     <div className="relative">
                       <select
-                        value={selectedService}
+                        value={selectedService || ''}
                         onChange={(e) => {
                           if (e.target.value === '__add_new__') {
                             setIsIngestionModalOpen(true);
@@ -692,6 +700,11 @@ function DashboardApp() {
                         }}
                         className="appearance-none bg-slate-100 hover:bg-slate-200/70 text-slate-700 text-xs font-semibold pl-2.5 pr-6 py-1 rounded-lg border border-slate-200/60 focus:outline-none cursor-pointer"
                       >
+                        {services.length === 0 && (
+                          <option value="" disabled>
+                            No services yet
+                          </option>
+                        )}
                         {services.map((s) => (
                           <option key={s.id} value={s.id}>
                             {s.name} {s.doc_count !== undefined ? `(${s.doc_count})` : ''}
@@ -738,17 +751,17 @@ function DashboardApp() {
                       handleStartChat();
                     }
                   }}
-                  placeholder={`Ask about ${selectedService}...`}
+                  placeholder={selectedService ? `Ask about ${selectedService}...` : 'Register a microservice first to start asking questions...'}
                   rows={2}
-                  disabled={isLoading}
-                  className="w-full resize-none bg-transparent text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none py-1"
+                  disabled={isLoading || !selectedService}
+                  className="w-full resize-none bg-transparent text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none py-1 disabled:cursor-not-allowed"
                 />
 
                 {/* Bottom Row: Circular Orange Up-Arrow Send Button */}
                 <div className="flex justify-end pt-1">
                   <button
                     onClick={() => handleStartChat()}
-                    disabled={!queryInput.trim() || isLoading}
+                    disabled={!queryInput.trim() || isLoading || !selectedService}
                     type="button"
                     className={`w-7 h-7 rounded-full flex items-center justify-center transition-all cursor-pointer ${
                       queryInput.trim() && !isLoading
@@ -1071,7 +1084,7 @@ function DashboardApp() {
         }}
         onSuccess={async () => {
           const updated = await apiClient.listServices();
-          if (updated && updated.length > 0) setServices(updated);
+          if (updated) setServices(updated);
         }}
       />
 
@@ -1101,7 +1114,7 @@ function DashboardApp() {
             setActiveSourceModal({
               isOpen: false,
               file: '',
-              service: 'income-assessment-service',
+              service: '',
             })
           }
           file={activeSourceModal.file}

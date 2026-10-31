@@ -160,6 +160,54 @@ class Settings(BaseSettings):
         )
     )
 
+    # Google Gemini Settings
+    gemini_api_key: Optional[str] = Field(
+        default_factory=lambda: os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+    )
+    gemini_model_id: str = Field(
+        default_factory=lambda: os.getenv("GEMINI_MODEL_ID", "gemini-3.7-flash")
+    )
+    gemini_models: str = Field(
+        default_factory=lambda: os.getenv(
+            "GEMINI_MODELS",
+            "gemini-3.7-flash:Gemini 3.7 Flash:Fast 1M-context reasoning and coding model,"
+            "gemini-3.6-flash:Gemini 3.6 Flash:Balanced 1M-context architectural and coding model,"
+            "gemini-3.5-flash:Gemini 3.5 Flash:High-throughput 1M-context reasoning and code model,"
+            "gemini-3.5-flash-lite:Gemini 3.5 Flash Lite:Ultra-fast low-latency 1M-context model,"
+            "gemma-4-26b-a4b-it:Gemma 4 26B MoE IT:Open-weight Gemma 4 26B (4B active) instruction model",
+        )
+    )
+
+    def has_valid_gemini_key(self) -> bool:
+        raw = (self.gemini_api_key or "").strip()
+        return bool(
+            raw
+            and not raw.startswith("your_")
+            and not raw.startswith("AIza_your_")
+            and raw != "changeme"
+        )
+
+    def get_configured_gemini_models(self) -> List[Dict[str, Any]]:
+        """Parse configured Gemini models from comma-separated id:name:description string."""
+        raw = (self.gemini_models or "").strip()
+        if not raw:
+            return []
+        models: List[Dict[str, Any]] = []
+        for entry in raw.split(","):
+            parts = entry.strip().split(":")
+            if not parts or not parts[0]:
+                continue
+            m_id = parts[0].strip()
+            name = parts[1].strip() if len(parts) >= 2 else m_id
+            desc = ":".join(parts[2:]).strip() if len(parts) >= 3 else "Google Gemini model"
+            models.append({
+                "id": m_id,
+                "name": name,
+                "provider": "gemini",
+                "description": desc,
+            })
+        return models
+
     # Qdrant Cloud Settings
     qdrant_url: Optional[str] = Field(default_factory=lambda: os.getenv("QDRANT_URL"))
     qdrant_api_key: Optional[str] = Field(default_factory=lambda: os.getenv("QDRANT_API_KEY"))
@@ -171,19 +219,19 @@ class Settings(BaseSettings):
     )
     qdrant_embedding_model: str = Field(
         default_factory=lambda: os.getenv(
-            "QDRANT_EMBEDDING_MODEL", "sentence-transformers/all-MiniLM-L6-v2"
+            "QDRANT_EMBEDDING_MODEL", "jinaai/jina-embeddings-v2-base-code"
         )
     )
 
     # Domain Defaults
     default_microservice: str = Field(
-        default_factory=lambda: os.getenv("DEFAULT_MICROSERVICE", "income-assessment-service")
+        default_factory=lambda: os.getenv("DEFAULT_MICROSERVICE", "default-service")
     )
     embedding_dimension: int = Field(
         default_factory=lambda: int(
             os.getenv(
                 "EMBEDDING_DIMENSION",
-                "1024" if (os.getenv("EMBEDDING_PROVIDER") == "bedrock" and (os.getenv("AWS_BEARER_TOKEN_BEDROCK") or os.getenv("AWS_ACCESS_KEY_ID"))) else "384",
+                "1024" if (os.getenv("EMBEDDING_PROVIDER") == "bedrock" and (os.getenv("AWS_BEARER_TOKEN_BEDROCK") or os.getenv("AWS_ACCESS_KEY_ID"))) else "768",
             )
         )
     )
@@ -193,10 +241,38 @@ class Settings(BaseSettings):
 
 
 _settings: Optional[Settings] = None
+_last_env_mtime: float = 0.0
+
+
+def _current_env_mtime() -> float:
+    mtime = 0.0
+    for p in (
+        Path.cwd() / ".env",
+        Path(__file__).resolve().parent.parent.parent / ".env",
+    ):
+        try:
+            if p.is_file():
+                mtime = max(mtime, p.stat().st_mtime)
+        except Exception:
+            pass
+    return mtime
 
 
 def get_settings() -> Settings:
-    global _settings
-    if _settings is None:
+    global _settings, _last_env_mtime
+    curr_mtime = _current_env_mtime()
+    if _settings is None or (curr_mtime > 0 and curr_mtime != _last_env_mtime):
+        is_reload = _last_env_mtime > 0 and curr_mtime != _last_env_mtime
+        try:
+            from dotenv import load_dotenv
+            for p in (
+                Path.cwd() / ".env",
+                Path(__file__).resolve().parent.parent.parent / ".env",
+            ):
+                if p.is_file():
+                    load_dotenv(p, override=is_reload)
+        except ImportError:
+            pass
+        _last_env_mtime = curr_mtime
         _settings = Settings()
     return _settings

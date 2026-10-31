@@ -78,9 +78,11 @@ class VectorStore(Protocol):
         service_filter: Optional[str] = None,
         filter_dict: Optional[Dict[str, Any]] = None,
         score_threshold: Optional[float] = None,
+        query_text: Optional[str] = None,
     ) -> List[Chunk]:
         """
-        Perform nearest neighbor semantic search with service-level or arbitrary metadata filtering.
+        Perform nearest neighbor semantic or hybrid (dense + sparse BM25 RRF) search
+        with service-level or arbitrary metadata filtering.
         """
         ...
 

@@ -44,11 +44,17 @@ class MultiProviderLLMAdapter:
         # 2. Explicit prefix match (e.g. bedrock/model-id)
         if model.startswith("bedrock/") and "bedrock" in self.providers:
             return self.providers["bedrock"]
+        if (model.startswith("gemini/") or model.startswith("google/")) and "gemini" in self.providers:
+            return self.providers["gemini"]
         if (model.startswith("groq/") or model.startswith("openai/")) and "groq" in self.providers:
             return self.providers["groq"]
 
         # 3. Known model family heuristics
         lower_model = model.lower()
+        if any(prefix in lower_model for prefix in ["gemini-", "gemma-4", "gemma-3"]):
+            if "gemini" in self.providers:
+                return self.providers["gemini"]
+
         if any(prefix in lower_model for prefix in ["anthropic.claude", "amazon.nova", "amazon.titan", "qwen3-235b", "235b"]):
             if "bedrock" in self.providers:
                 return self.providers["bedrock"]
@@ -59,6 +65,16 @@ class MultiProviderLLMAdapter:
 
         # Fallback to default configured provider
         return self.default_provider
+
+    def resolve_meta(self, model: Optional[str]) -> Tuple[str, str]:
+        """Return (provider_name, resolved_model_id) for metadata reporting."""
+        provider = self._resolve_provider(model)
+        p_name = getattr(provider, "provider_name", None)
+        if not p_name:
+            base_url = getattr(provider, "base_url", "") or ""
+            p_name = "groq" if "groq" in base_url.lower() else "openai"
+        resolved_model = model or getattr(provider, "model_id", "default")
+        return p_name, resolved_model
 
     def _get_candidate_providers(self, model: Optional[str]) -> List[Tuple[LLMProvider, Optional[str]]]:
         """
@@ -88,7 +104,7 @@ class MultiProviderLLMAdapter:
         **kwargs: Any,
     ) -> LLMResponse:
         candidates = self._get_candidate_providers(model)
-        last_err: Optional[Exception] = None
+        primary_err: Optional[Exception] = None
 
         for idx, (provider, candidate_model) in enumerate(candidates):
             try:
@@ -106,10 +122,11 @@ class MultiProviderLLMAdapter:
                     f"LLM provider {p_name} (candidate #{idx+1}) failed during generate: {e}. "
                     f"Attempting fallback to next available provider..."
                 )
-                last_err = e
+                if primary_err is None:
+                    primary_err = e
 
-        if last_err:
-            raise last_err
+        if primary_err:
+            raise primary_err
         raise RuntimeError("No LLM provider available.")
 
     async def stream(
@@ -122,7 +139,7 @@ class MultiProviderLLMAdapter:
         **kwargs: Any,
     ) -> AsyncIterator[str]:
         candidates = self._get_candidate_providers(model)
-        last_err: Optional[Exception] = None
+        primary_err: Optional[Exception] = None
 
         for idx, (provider, candidate_model) in enumerate(candidates):
             try:
@@ -150,8 +167,9 @@ class MultiProviderLLMAdapter:
                     f"LLM provider {p_name} (candidate #{idx+1}) failed during stream: {e}. "
                     f"Attempting fallback to next available provider..."
                 )
-                last_err = e
+                if primary_err is None:
+                    primary_err = e
 
-        if last_err:
-            raise last_err
+        if primary_err:
+            raise primary_err
         raise RuntimeError("No LLM provider available.")

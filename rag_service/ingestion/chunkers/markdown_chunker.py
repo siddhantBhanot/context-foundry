@@ -132,9 +132,18 @@ class MarkdownChunker:
         headers: List[str],
         extra_metadata: Optional[dict],
     ) -> Chunk:
-        # Prepend header breadcrumbs if available and not already in text
-        breadcrumbs = " > ".join(headers) if headers else ""
-        formatted_content = f"[{breadcrumbs}]\n{text}" if breadcrumbs and not text.startswith(f"[{breadcrumbs}]") else text
+        from pathlib import Path
+        file_name = Path(file_path).name
+        breadcrumbs = " > ".join(headers) if headers else file_name
+        scope_prefix = f"[Document: {file_name} | Section: {breadcrumbs}]"
+        formatted_content = f"{scope_prefix}\n{text}" if not text.startswith("[Document:") else text
+
+        # Extract CamelCase code symbol references inside backticks (e.g. `OrderService`, `PaymentController`)
+        referenced_symbols = list(
+            dict.fromkeys(
+                re.findall(r"`([A-Z][A-Za-z0-9_]{2,})(?:\.[a-zA-Z0-9_]+)?(?:\(\))?`", text)
+            )
+        )[:15]
 
         chunk_id_raw = f"{file_path}#{index}#{start_line}-{end_line}"
         chunk_id = hashlib.sha256(chunk_id_raw.encode("utf-8")).hexdigest()[:16]
@@ -149,7 +158,9 @@ class MarkdownChunker:
             end_line=end_line,
             extra={
                 "section_hierarchy": headers,
+                "section_title": headers[-1] if headers else None,
                 "breadcrumbs": breadcrumbs,
+                "dependencies": referenced_symbols,
                 **(extra_metadata or {}),
             },
         )

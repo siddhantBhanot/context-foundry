@@ -12,7 +12,6 @@ if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
 _storage_dir = _project_root / "backend_service" / "data" / "storage" / "services"
-_sample_dir = _project_root / "rag_service" / "sample_data"
 
 from backend_service.app.domain.exceptions.base import (
     DomainException,
@@ -36,13 +35,15 @@ class DirectRAGClient(RAGClientProtocol):
         self._kt_engine = None
         self._course_indexer = None
         self._indexed_courses: set = set()
+        self._initialized_env_mtime: float = 0.0
         self._init_rag()
 
     def _init_rag(self) -> None:
         try:
-            from rag_service.infrastructure.config import get_settings as get_rag_settings
+            from rag_service.infrastructure.config import _current_env_mtime, get_settings as get_rag_settings
             from rag_service.infrastructure.providers.bedrock_embedding import BedrockEmbeddingProvider
             from rag_service.infrastructure.providers.bedrock_llm import BedrockLLMProvider
+            from rag_service.infrastructure.providers.gemini_llm import GeminiLLMProvider
             from rag_service.infrastructure.providers.openai_llm import OpenAiClientProvider
             from rag_service.infrastructure.providers.qdrant_embedding import QdrantEmbeddingProvider
             from rag_service.infrastructure.providers.qdrant_store import QdrantVectorStoreAdapter
@@ -52,12 +53,20 @@ class DirectRAGClient(RAGClientProtocol):
             from rag_service.prompts.loader import PromptLoader
 
             settings = get_rag_settings()
+            self._initialized_env_mtime = _current_env_mtime()
+            raw_bedrock_token = (settings.aws_bearer_token_bedrock or "").strip()
+            has_valid_bedrock_token = bool(
+                raw_bedrock_token
+                and not raw_bedrock_token.startswith("your_")
+                and raw_bedrock_token.startswith("ABSK")
+            )
             has_aws = bool(
-                settings.aws_bearer_token_bedrock
+                has_valid_bedrock_token
                 or (settings.aws_access_key_id and settings.aws_secret_access_key)
             )
             has_openai = bool(settings.openai_api_key)
             has_groq = bool(settings.groq_api_key)
+            has_gemini = settings.has_valid_gemini_key()
 
             # Embedder: Use Bedrock if explicitly configured and AWS credentials exist; otherwise use Qdrant FastEmbed
             if settings.embedding_provider == "bedrock" and has_aws:
@@ -72,27 +81,45 @@ class DirectRAGClient(RAGClientProtocol):
             # LLM Provider with Multi-Provider Routing
             bedrock_provider = BedrockLLMProvider(settings) if has_aws else None
             openai_provider = OpenAiClientProvider(settings) if has_openai else None
+            gemini_provider = GeminiLLMProvider(settings) if has_gemini else None
 
-            if bedrock_provider and openai_provider:
-                default_p = openai_provider if has_groq else bedrock_provider
+            active_providers: Dict[str, Any] = {}
+            if openai_provider:
+                active_providers["groq"] = openai_provider
+                active_providers["openai"] = openai_provider
+            if gemini_provider:
+                active_providers["gemini"] = gemini_provider
+            if bedrock_provider:
+                active_providers["bedrock"] = bedrock_provider
+
+            if active_providers:
+                pref_provider = (settings.llm_provider or "").lower()
+                if pref_provider == "gemini" and gemini_provider:
+                    default_p = gemini_provider
+                elif pref_provider == "bedrock" and bedrock_provider:
+                    default_p = bedrock_provider
+                elif openai_provider:
+                    default_p = openai_provider
+                elif gemini_provider:
+                    default_p = gemini_provider
+                else:
+                    default_p = bedrock_provider
+
                 multi_adapter = MultiProviderLLMAdapter(
                     default_provider=default_p,
-                    providers={
-                        "groq": openai_provider,
-                        "openai": openai_provider,
-                        "bedrock": bedrock_provider,
-                    },
+                    providers=active_providers,
                 )
-                for bm in settings.get_configured_bedrock_models():
-                    multi_adapter.register_model(bm["id"], "bedrock")
-                multi_adapter.register_model(settings.bedrock_llm_model_id, "bedrock")
+                if bedrock_provider:
+                    for bm in settings.get_configured_bedrock_models():
+                        multi_adapter.register_model(bm["id"], "bedrock")
+                    multi_adapter.register_model(settings.bedrock_llm_model_id, "bedrock")
+                if gemini_provider:
+                    for gm in settings.get_configured_gemini_models():
+                        multi_adapter.register_model(gm["id"], "gemini")
+                    multi_adapter.register_model(settings.gemini_model_id, "gemini")
                 llm_provider = multi_adapter
-            elif bedrock_provider:
-                llm_provider = bedrock_provider
-            elif openai_provider:
-                llm_provider = openai_provider
             else:
-                # Standalone fallback if neither is present
+                # Standalone fallback if no provider is configured
                 from rag_service.run_local import LocalSimulatedLLM
                 llm_provider = LocalSimulatedLLM()
 
@@ -139,7 +166,13 @@ class DirectRAGClient(RAGClientProtocol):
             self._course_indexer = None
 
     def _ensure_initialized(self):
-        if self._pipeline is None or self._kt_engine is None:
+        from rag_service.infrastructure.config import _current_env_mtime
+        curr_mtime = _current_env_mtime()
+        if (
+            self._pipeline is None
+            or self._kt_engine is None
+            or (curr_mtime > 0 and curr_mtime != self._initialized_env_mtime)
+        ):
             self._init_rag()
         if self._pipeline is None:
             raise RAGServiceException(
@@ -148,17 +181,52 @@ class DirectRAGClient(RAGClientProtocol):
 
     async def list_models(self) -> List[dict]:
         """Discover available LLM models strictly based on active server configuration."""
-        from rag_service.infrastructure.config import get_settings
+        from rag_service.infrastructure.config import _current_env_mtime, get_settings
         settings = get_settings()
+        if _current_env_mtime() != self._initialized_env_mtime:
+            self._init_rag()
 
         has_groq = bool(settings.groq_api_key)
         has_openai = bool(settings.openai_api_key)
+        has_gemini = settings.has_valid_gemini_key()
+        raw_bedrock_token = (settings.aws_bearer_token_bedrock or "").strip()
+        has_valid_bedrock_token = bool(
+            raw_bedrock_token
+            and not raw_bedrock_token.startswith("your_")
+            and raw_bedrock_token.startswith("ABSK")
+        )
         has_aws = bool(
-            settings.aws_bearer_token_bedrock
+            has_valid_bedrock_token
             or (settings.aws_access_key_id and settings.aws_secret_access_key)
         )
 
         models: List[dict] = []
+
+        if has_gemini:
+            configured_gemini = settings.get_configured_gemini_models()
+            if configured_gemini:
+                models.extend(configured_gemini)
+            else:
+                models.extend([
+                    {
+                        "id": "gemini-2.5-flash",
+                        "name": "Gemini 2.5 Flash",
+                        "provider": "gemini",
+                        "description": "Fast 1M-context reasoning and coding model",
+                    },
+                    {
+                        "id": "gemini-2.5-pro",
+                        "name": "Gemini 2.5 Pro",
+                        "provider": "gemini",
+                        "description": "Complex architectural reasoning and coding model (1M context)",
+                    },
+                    {
+                        "id": "gemini-3.7-flash",
+                        "name": "Gemini 3.7 Flash",
+                        "provider": "gemini",
+                        "description": "Next-gen fast 1M-context agentic and multimodal model",
+                    },
+                ])
 
         if has_groq or (has_openai and "groq" in (settings.openai_base_url or "").lower()):
             models.extend([
@@ -254,8 +322,13 @@ class DirectRAGClient(RAGClientProtocol):
 
         # Determine default model
         target_default = None
-        if settings.llm_provider and settings.llm_provider.lower() == "bedrock" and has_aws:
+        pref_provider = (settings.llm_provider or "").lower()
+        if pref_provider == "gemini" and has_gemini:
+            target_default = settings.gemini_model_id
+        elif pref_provider == "bedrock" and has_aws:
             target_default = settings.bedrock_llm_model_id
+        elif has_gemini and not (has_groq or has_openai):
+            target_default = settings.gemini_model_id
         elif has_groq or has_openai:
             target_default = settings.openai_model_id
 
@@ -280,12 +353,7 @@ class DirectRAGClient(RAGClientProtocol):
         top_k: int = 5,
         model: Optional[str] = None,
     ) -> RAGQueryResult:
-        if self._pipeline is None:
-            self._init_rag()
-        if self._pipeline is None:
-            raise RAGServiceException(
-                "RAG pipeline could not be initialized. Please check rag_service dependencies and configuration."
-            )
+        self._ensure_initialized()
 
         # Validate requested model if explicitly provided
         if model:
@@ -407,8 +475,8 @@ class DirectRAGClient(RAGClientProtocol):
         service: str,
         file_path: str,
     ) -> DocumentView:
-        from rag_service.infrastructure.document_reader import DocumentReader
         from backend_service.app.domain.models.knowledge import DocumentView
+        from backend_service.app.domain.exceptions.base import EntityNotFoundException
 
         clean_path = file_path.strip().lstrip("/\\")
 
@@ -416,8 +484,6 @@ class DirectRAGClient(RAGClientProtocol):
         candidates = [
             _storage_dir / service / clean_path,
             _storage_dir / service / "pending" / clean_path,
-            _sample_dir / service / clean_path,
-            _sample_dir / service / "pending" / clean_path,
         ]
 
         found_path: Optional[Path] = None
@@ -429,14 +495,12 @@ class DirectRAGClient(RAGClientProtocol):
         # If not found by direct relative path, search by filename
         if not found_path:
             filename = Path(clean_path).name
-            for base in [_storage_dir / service, _sample_dir / service]:
-                if base.is_dir():
-                    for p in base.rglob("*"):
-                        if p.is_file() and p.name == filename:
-                            found_path = p
-                            break
-                if found_path:
-                    break
+            base = _storage_dir / service
+            if base.is_dir():
+                for p in base.rglob("*"):
+                    if p.is_file() and p.name == filename:
+                        found_path = p
+                        break
 
         if found_path and found_path.is_file():
             stat = found_path.stat()
@@ -455,7 +519,14 @@ class DirectRAGClient(RAGClientProtocol):
                 content_type = "pdf"
             else:
                 content = found_path.read_text(encoding="utf-8", errors="replace")
-                content_type = "kotlin" if suffix in {".kt", ".kts"} else "markdown"
+                if suffix in {".kt", ".kts"}:
+                    content_type = "kotlin"
+                elif suffix == ".java":
+                    content_type = "java"
+                elif suffix == ".py":
+                    content_type = "python"
+                else:
+                    content_type = "markdown"
 
             lines = content.splitlines()
             return DocumentView(
@@ -467,17 +538,7 @@ class DirectRAGClient(RAGClientProtocol):
                 size_bytes=stat.st_size,
             )
 
-        # Fallback to DocumentReader
-        reader = DocumentReader(data_dir=_sample_dir)
-        doc = reader.read_document(service=service, file_path=file_path)
-        return DocumentView(
-            file=doc.file,
-            service=doc.service,
-            content=doc.content,
-            content_type=doc.content_type,
-            total_lines=doc.total_lines,
-            size_bytes=doc.size_bytes,
-        )
+        raise EntityNotFoundException(entity_name="Document", entity_id=f"{service}/{file_path}")
 
     async def upload_document(
         self,
@@ -493,9 +554,9 @@ class DirectRAGClient(RAGClientProtocol):
 
         safe_name = Path(file_name).name
         suffix = Path(safe_name).suffix.lower()
-        if suffix not in {".md", ".markdown", ".pdf", ".kt", ".kts", ".zip"}:
+        if suffix not in {".md", ".markdown", ".pdf", ".kt", ".kts", ".java", ".py", ".zip"}:
             raise ValueError(
-                f"Unsupported file format '{suffix}'. Supported formats: .kt, .kts, .md, .pdf, or .zip archive."
+                f"Unsupported file format '{suffix}'. Supported formats: .kt, .kts, .java, .py, .md, .pdf, or .zip archive."
             )
 
         pending_dir = _storage_dir / service / "pending"
@@ -525,7 +586,7 @@ class DirectRAGClient(RAGClientProtocol):
                         if p.is_absolute() or ".." in p.parts:
                             raise ValueError(f"Malicious zip entry detected: {member.filename}")
 
-                    allowed_inner = {".md", ".markdown", ".pdf", ".kt", ".kts"}
+                    allowed_inner = {".md", ".markdown", ".pdf", ".kt", ".kts", ".java", ".py"}
                     for member in zf.infolist():
                         if member.is_dir():
                             continue
@@ -540,7 +601,7 @@ class DirectRAGClient(RAGClientProtocol):
 
                 if not extracted_files:
                     raise ValueError(
-                        "No valid Kotlin source (.kt, .kts), Markdown (.md), or PDF (.pdf) files were found in the uploaded zip archive."
+                        "No valid Kotlin (.kt, .kts), Java (.java), Python (.py), Markdown (.md), or PDF (.pdf) files were found in the uploaded zip archive."
                     )
 
                 return {
@@ -582,16 +643,18 @@ class DirectRAGClient(RAGClientProtocol):
                 return "PDF"
             if s in {".kt", ".kts"}:
                 return "KT"
+            if s == ".java":
+                return "JAVA"
+            if s == ".py":
+                return "PY"
             return "MD"
 
-        allowed_exts = {".md", ".markdown", ".pdf", ".kt", ".kts"}
+        allowed_exts = {".md", ".markdown", ".pdf", ".kt", ".kts", ".java", ".py"}
         results = []
         seen_names = set()
 
-        for base_dir in [_storage_dir / service, _sample_dir / service]:
-            if not base_dir.is_dir():
-                continue
-
+        base_dir = _storage_dir / service
+        if base_dir.is_dir():
             # 1. Check pending directory
             pending_dir = base_dir / "pending"
             if pending_dir.is_dir():
@@ -654,16 +717,8 @@ class DirectRAGClient(RAGClientProtocol):
             target_dirs.append(Path(source_directory))
         else:
             storage_service = _storage_dir / service
-            sample_service = _sample_dir / service
-            if storage_service.exists():
-                target_dirs.append(storage_service)
-            if sample_service.exists():
-                target_dirs.append(sample_service)
-
-            if not target_dirs:
-                # If neither exists, ensure storage directory is created
-                storage_service.mkdir(parents=True, exist_ok=True)
-                target_dirs.append(storage_service)
+            storage_service.mkdir(parents=True, exist_ok=True)
+            target_dirs.append(storage_service)
 
         job = IngestionJob(
             id=str(uuid.uuid4()),
@@ -685,7 +740,7 @@ class DirectRAGClient(RAGClientProtocol):
                 pending_dir = target_dir / "pending"
                 if pending_dir.is_dir():
                     for p in list(pending_dir.rglob("*")):
-                        if p.is_file() and p.suffix.lower() in {".md", ".markdown", ".pdf", ".kt", ".kts"}:
+                        if p.is_file() and p.suffix.lower() in {".md", ".markdown", ".pdf", ".kt", ".kts", ".java", ".py"}:
                             rel = p.relative_to(pending_dir)
                             dest = target_dir / rel
                             dest.parent.mkdir(parents=True, exist_ok=True)

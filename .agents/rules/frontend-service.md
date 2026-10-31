@@ -13,7 +13,7 @@ ContextFoundry Engineering Intelligence Platform.
 It supports:
 
 -   Dynamic microservice selection and creation
--   Source code (.kt, .kts) and documentation (.md, .pdf, .zip) ingestion
+-   Source code (.kt, .kts, .java, .py) and documentation (.md, .pdf, .zip) ingestion
 -   Microservice-grounded streaming chat with exact line citations
 -   Interactive Knowledge Cafe: course enrollment, lesson synthesis, doubt drawer, and tutorial authoring
 

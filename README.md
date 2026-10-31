@@ -6,9 +6,13 @@
 [![FastAPI](https://img.shields.io/badge/FastAPI-0.115+-009688.svg?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
 [![React](https://img.shields.io/badge/React-19.2+-61DAFB.svg?logo=react&logoColor=black)](https://react.dev)
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.0+-3178C6.svg?logo=typescript&logoColor=white)](https://www.typescriptlang.org)
-[![LlamaIndex](https://img.shields.io/badge/LlamaIndex-0.12+-purple.svg)](https://www.llamaindex.ai)
-[![Qdrant](https://img.shields.io/badge/Qdrant-Vector_DB-red.svg?logo=qdrant)](https://qdrant.tech)
+[![Gemini](https://img.shields.io/badge/Google_Gemini-3.7_Flash-4285F4.svg?logo=googlegemini&logoColor=white)](https://ai.google.dev)
+[![Qdrant](https://img.shields.io/badge/Qdrant-Hybrid_RRF-red.svg?logo=qdrant)](https://qdrant.tech)
 [![Docker](https://img.shields.io/badge/Docker-Ready-2496ED.svg?logo=docker&logoColor=white)](https://www.docker.com)
+
+<p align="center">
+  <img src="docs/assets/contextfoundry-walkthrough.gif" alt="ContextFoundry Live Walkthrough" width="100%" />
+</p>
 
 ---
 
@@ -18,10 +22,11 @@
 
 Key capabilities include:
 
-- **Interactive Microservice Chat**: Grounded Q&A against source code, APIs, and architectural decisions with exact line-level markdown citations.
+- **Interactive Microservice Chat**: Grounded Q&A against source code, APIs, and architectural decisions with exact line-level citations and one-click syntax-highlighted source code inspection.
+- **Hybrid Code Retrieval (Dense + BM25 RRF) & Bidirectional 1-Hop Expansion**: Combines 768-dim `jinaai/jina-embeddings-v2-base-code` dense vectors with `Qdrant/bm25` sparse lexical search using Reciprocal Rank Fusion (RRF), plus automatic `RepoMap` blueprint injection and bidirectional 1-hop caller/collaborator expansion.
 - **Knowledge Cafe (Interactive KT)**: Structured onboarding curriculum featuring module syllabi, lesson progression, doubt-clearing AI assistants, and automated quizzes.
 - **Dynamic Architecture Diagrams**: Automatically generates and renders interactive Mermaid sequence flows and entity relationship diagrams from retrieved code context.
-- **Self-Service Ingestion**: Drag-and-drop document and codebase ingestion supporting ZIP archives, PDF, Markdown, and source code with AST-aware chunking.
+- **Self-Service Code & Markdown Ingestion**: Drag-and-drop codebase ingestion supporting Kotlin (`.kt`, `.kts`), Java (`.java`), Python (`.py`), Markdown (`.md`), PDF (`.pdf`), and `.zip` archives with structural scope headers, plus an in-browser custom Markdown (`.md`) context editor.
 - **Conversation Management & Sharing**: Multi-turn conversation history drawer, shareable read-only links, and granular feedback controls.
 
 ---

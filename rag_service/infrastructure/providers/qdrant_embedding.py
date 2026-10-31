@@ -1,15 +1,19 @@
 import asyncio
+import logging
 from typing import List, Optional
 
 from rag_service.domain.protocols import EmbeddingProvider
 from rag_service.infrastructure.config import Settings, get_settings
 
+logger = logging.getLogger(__name__)
+
 
 class QdrantEmbeddingProvider:
     """
     Qdrant semantic embedding provider conforming to EmbeddingProvider protocol.
-    Powered by Qdrant's official FastEmbed engine with Qdrant Cloud Inference compatibility.
-    Uses sentence-transformers/all-MiniLM-L6-v2 by default for neural semantic search.
+    Powered by Qdrant's official FastEmbed engine.
+    Defaults to `jinaai/jina-embeddings-v2-base-code` (768-dim, 8192-token context)
+    for code-aware and documentation-aware semantic representation.
     """
 
     def __init__(
@@ -21,17 +25,27 @@ class QdrantEmbeddingProvider:
         self.model_name = (
             model_name
             or getattr(self.settings, "qdrant_embedding_model", None)
-            or "sentence-transformers/all-MiniLM-L6-v2"
+            or "jinaai/jina-embeddings-v2-base-code"
         )
         self._model = None
-        self._dim = 384
+        self._dim = 768
         self._init_model()
 
     def _init_model(self) -> None:
         try:
             from fastembed import TextEmbedding
 
-            self._model = TextEmbedding(model_name=self.model_name)
+            try:
+                self._model = TextEmbedding(model_name=self.model_name)
+            except Exception as inner_e:
+                logger.warning(
+                    "Could not load embedding model '%s' (%s), falling back to 'sentence-transformers/all-MiniLM-L6-v2'",
+                    self.model_name,
+                    inner_e,
+                )
+                self.model_name = "sentence-transformers/all-MiniLM-L6-v2"
+                self._model = TextEmbedding(model_name=self.model_name)
+
             # Verify dimension dynamically
             test_res = list(self._model.embed(["probe"]))
             if test_res:

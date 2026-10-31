@@ -46,6 +46,7 @@ dist-ssr/
 *.sqlite
 *.sqlite3
 data/*.db
+backend_service/data/
 
 # IDE & Agent State
 .antigravity/

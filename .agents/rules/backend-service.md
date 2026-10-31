@@ -15,9 +15,9 @@ or small team, managing:
 
 -   Authentication & user sessions (PBKDF2-HMAC-SHA256 & JWT)
 -   Dynamic microservice registration and lifecycle management
--   Document & source code upload staging (.kt, .kts, .md, .pdf, .zip)
--   Triggering RAG indexing and re-indexing into vector storage
--   Real-time grounded query streaming (SSE) with line-level citations
+-   Document & source code upload staging (.kt, .kts, .java, .py, .md, .pdf, .zip)
+-   Triggering RAG indexing, RepoMap generation, and re-indexing into vector storage
+-   Real-time grounded query streaming (SSE) with hybrid retrieval, 1-hop dependency expansion, and line-level citations
 -   Knowledge Cafe tutorial authoring, publishing, enrollment, and quizzes
 
 It must provide a clean API boundary between the frontend and the
