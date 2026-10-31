@@ -46,15 +46,10 @@ services:
     rootDir: frontend-service
     buildCommand: npm ci && npm run build
     staticPublishPath: dist
-    plan: free
-    region: oregon
     routes:
       - type: rewrite
         source: /*
         destination: /index.html
     envVars:
       - key: VITE_API_BASE_URL
-        fromService:
-          name: contextfoundry-backend
-          type: web
-          property: host
+        value: https://contextfoundry-backend.onrender.com
