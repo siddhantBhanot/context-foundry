@@ -44,6 +44,12 @@ class Settings(BaseSettings):
     host: str = Field(default_factory=lambda: os.getenv("HOST", "0.0.0.0"))
     port: int = Field(default_factory=lambda: int(os.getenv("PORT", "8000")))
     environment: str = Field(default_factory=lambda: os.getenv("ENVIRONMENT", "development"))
+    # When false: the signup endpoint is disabled, the hardcoded demo account cannot be
+    # auto-provisioned or used to log in, and the UI hides both. Set to false in cloud deployments.
+    allow_user_registration: bool = Field(
+        default_factory=lambda: os.getenv("ALLOW_USER_REGISTRATION", "true").strip().lower()
+        in {"1", "true", "yes", "on"}
+    )
     cors_origins: Union[List[str], str] = Field(
         default=["http://localhost:5173", "http://localhost:3000"]
     )

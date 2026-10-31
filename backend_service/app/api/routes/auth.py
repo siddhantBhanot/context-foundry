@@ -9,6 +9,17 @@ from backend_service.app.domain.models.user import User
 router = APIRouter(prefix="/auth", tags=["Authentication"])
 
 
+@router.get("/config")
+async def get_auth_config(
+    auth_service: AuthService = Depends(get_auth_service),
+) -> Dict[str, Any]:
+    """
+    Public auth capabilities so the UI can hide account creation and the demo sign-in
+    when registration is disabled (ALLOW_USER_REGISTRATION=false).
+    """
+    return {"registration_enabled": auth_service.registration_enabled}
+
+
 @router.post("/signup", response_model=TokenResponse, status_code=status.HTTP_201_CREATED)
 async def signup(
     payload: SignupRequest,

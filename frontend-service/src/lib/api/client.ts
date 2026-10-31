@@ -466,6 +466,13 @@ export class ApiClient {
   }
 
   /**
+   * Public auth capabilities (whether account creation / demo sign-in are enabled)
+   */
+  async getAuthConfig(): Promise<{ registration_enabled: boolean }> {
+    return this.fetch<{ registration_enabled: boolean }>('/api/v1/auth/config');
+  }
+
+  /**
    * Register a new user account
    */
   async signup(payload: SignupRequest): Promise<AuthResponse> {

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import {
   AlertCircle,
   ArrowRight,
@@ -13,6 +13,7 @@ import {
 } from 'lucide-react';
 import { useAuth } from '@/lib/auth/AuthContext';
 import { ApiError } from '@/lib/api/client';
+import apiClient from '@/lib/api/client';
 import { ContextFoundryLogo } from '@/components/brand/ContextFoundryLogo';
 
 export function AuthScreen() {
@@ -25,6 +26,28 @@ export function AuthScreen() {
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  // Account creation + demo sign-in are controlled by the backend (ALLOW_USER_REGISTRATION).
+  // Stay hidden until the backend confirms they are enabled (fail closed).
+  const [registrationEnabled, setRegistrationEnabled] = useState(false);
+
+  useEffect(() => {
+    let cancelled = false;
+    apiClient
+      .getAuthConfig()
+      .then((cfg) => {
+        if (!cancelled) setRegistrationEnabled(Boolean(cfg.registration_enabled));
+      })
+      .catch(() => {
+        if (!cancelled) setRegistrationEnabled(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!registrationEnabled) setMode('login');
+  }, [registrationEnabled]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,7 +129,7 @@ export function AuthScreen() {
           </div>
 
           {/* Quick Demo Login */}
-          {mode === 'login' && (
+          {mode === 'login' && registrationEnabled && (
             <div className="mb-6 space-y-2">
               <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block text-center">
                 One-Click Demo Sign In
@@ -137,7 +160,8 @@ export function AuthScreen() {
             </div>
           )}
 
-          {/* Mode Switcher Tabs */}
+          {/* Mode Switcher Tabs (hidden when registration is disabled) */}
+          {registrationEnabled && (
           <div className="flex p-1 bg-slate-100 rounded-full border border-slate-200/80 mb-6">
             <button
               type="button"
@@ -168,6 +192,7 @@ export function AuthScreen() {
               Create Account
             </button>
           </div>
+          )}
 
           {/* Error Message Banner */}
           {errorMessage && (

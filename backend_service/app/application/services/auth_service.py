@@ -3,7 +3,11 @@ import re
 from typing import Any, Dict, Optional
 import uuid
 
-from backend_service.app.domain.exceptions.base import AuthenticationException, ValidationException
+from backend_service.app.domain.exceptions.base import (
+    AuthenticationException,
+    ForbiddenException,
+    ValidationException,
+)
 from backend_service.app.domain.interfaces.user_repository import UserRepository
 from backend_service.app.domain.models.user import User
 from backend_service.app.infrastructure.configuration.settings import Settings, get_settings
@@ -19,6 +23,7 @@ class AuthService:
     """Application service for user registration, authentication, and token management."""
 
     EMAIL_REGEX = re.compile(r"^[^@\s]+@[^@\s]+\.[^@\s]+$")
+    DEMO_EMAILS = frozenset({"engineer@contextfoundry.dev", "dev@contextfoundry.dev"})
 
     def __init__(
         self,
@@ -28,7 +33,14 @@ class AuthService:
         self.user_repo = user_repo
         self.settings = settings or get_settings()
 
+    @property
+    def registration_enabled(self) -> bool:
+        return bool(self.settings.allow_user_registration)
+
     async def signup(self, email: str, password: str, name: str, role: str = "developer") -> Dict[str, Any]:
+        if not self.registration_enabled:
+            raise ForbiddenException("Account creation is disabled on this deployment.")
+
         clean_email = email.lower().strip()
         clean_name = name.strip()
         clean_role = (role or "developer").strip().lower()
@@ -76,10 +88,14 @@ class AuthService:
             raise ValidationException("Email and password are required.")
 
         user = await self.user_repo.get_by_email(clean_email)
-        
-        # Auto-provision demo accounts if they don't exist yet (non-production environments only)
-        if not user and self.settings.environment.lower() != "production":
-            if clean_email in {"engineer@contextfoundry.dev", "dev@contextfoundry.dev"}:
+
+        # The hardcoded demo account (known password) is only usable when registration is enabled,
+        # even if it already exists in the database. Otherwise anyone could log in with it.
+        if clean_email in self.DEMO_EMAILS:
+            if not self.registration_enabled:
+                raise AuthenticationException("Invalid email or password.")
+            # Auto-provision on first use (non-production environments only)
+            if not user and self.settings.environment.lower() != "production":
                 user = await self.user_repo.create_user(User(
                     id=str(uuid.uuid4()),
                     email=clean_email,
