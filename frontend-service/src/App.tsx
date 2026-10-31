@@ -19,7 +19,6 @@ import {
   Share2,
   Cpu,
   UploadCloud,
-  HeartHandshake,
 } from 'lucide-react';
 
 import { MarkdownRenderer } from '@/components/chat/MarkdownRenderer';
@@ -30,7 +29,6 @@ import { ConversationHistoryDrawer } from '@/components/chat/ConversationHistory
 import { ShareModal } from '@/components/chat/ShareModal';
 import { DocumentViewerModal } from '@/components/chat/DocumentViewerModal';
 import { KnowledgeCafeView } from '@/components/kt/KnowledgeCafeView';
-import { SaathiView } from '@/components/saathi/SaathiView';
 import { AuthProvider, useAuth } from '@/lib/auth/AuthContext';
 import { AuthScreen } from '@/components/auth/AuthScreen';
 import apiClient, { ApiError } from '@/lib/api/client';
@@ -38,62 +36,41 @@ import type { ChatMessage, Microservice, ModelInfo } from '@/types';
 import { ContextFoundryLogo } from '@/components/brand/ContextFoundryLogo';
 
 
-const DEFAULT_SERVICES: Microservice[] = [
-  {
-    id: 'income-assessment-service',
-    name: 'income-assessment-service',
-    description: 'Income assessment rules engine & eligibility calculations',
-    has_indexed_data: true,
-  },
-  {
-    id: 'loan-origination-service',
-    name: 'loan-origination-service',
-    description: 'Loan application lifecycle & underwriting workflows',
-    has_indexed_data: false,
-  },
-  {
-    id: 'kyc-verification-service',
-    name: 'kyc-verification-service',
-    description: 'Identity verification & document assessment',
-    has_indexed_data: false,
-  },
-];
-
 const FEATURE_CARDS = [
   {
     id: 'apis',
     icon: Code2,
     title: 'APIs',
     description: 'Endpoints, params, auth, and response schemas across every service.',
-    query: 'What are the main endpoints and auth schemas for this service?',
+    query: 'What are the main endpoints, request parameters, and response schemas exposed by this service?',
   },
   {
     id: 'business-logic',
     icon: GitBranch,
     title: 'Business logic',
-    description: 'How rules, eligibility, and calculations are evaluated under the hood.',
-    query: 'What is the business handler for FOUR_WHEELER_PERSONAL and what endpoint does it expose?',
+    description: 'How rules, domain models, and calculations are evaluated under the hood.',
+    query: 'How is the core domain logic and validation implemented in this service?',
   },
   {
     id: 'request-flows',
     icon: GitMerge,
     title: 'Request flows',
     description: 'Trace a request end-to-end, including retries, queues, and callbacks.',
-    query: 'What is the usual request flow for income-assessment-service?',
+    query: 'Walk me through the end-to-end request execution flow and state transitions for this service.',
   },
   {
     id: 'integrations',
     icon: Layers,
     title: 'Integrations',
     description: 'Third-party connections, webhooks, and cross-service dependencies.',
-    query: 'What is Zenith and what is it used for?',
+    query: 'What external services, databases, or downstream APIs does this service integrate with?',
   },
 ];
 
 function DashboardApp() {
   const { user, isAuthenticated, isLoading: isAuthLoading, logout } = useAuth();
-  const [services, setServices] = useState<Microservice[]>(DEFAULT_SERVICES);
-  const [selectedService, setSelectedService] = useState<string>(DEFAULT_SERVICES[0].id);
+  const [services, setServices] = useState<Microservice[]>([]);
+  const [selectedService, setSelectedService] = useState<string>('');
   const [models, setModels] = useState<ModelInfo[]>([]);
   const [selectedModel, setSelectedModel] = useState<string>('');
   const [queryInput, setQueryInput] = useState<string>('');
@@ -119,23 +96,12 @@ function DashboardApp() {
   } | null>(null);
   const [forkNotification, setForkNotification] = useState<string | null>(null);
   const [errorMessage, setErrorMessage] = useState<{ message: string; requestId?: string } | null>(null);
-  const isBankingStaff = user?.role === 'banking_staff';
-  const [activeMode, setActiveMode] = useState<'chat' | 'knowledge-cafe' | 'saathi'>(() => {
-    return user?.role === 'banking_staff' ? 'saathi' : 'chat';
-  });
-
-  useEffect(() => {
-    if (isBankingStaff && activeMode === 'chat') {
-      setActiveMode('saathi');
-    } else if (!isBankingStaff && activeMode === 'saathi') {
-      setActiveMode('chat');
-    }
-  }, [isBankingStaff, activeMode]);
+  const [activeMode, setActiveMode] = useState<'chat' | 'knowledge-cafe'>('chat');
   const [activeSourceModal, setActiveSourceModal] = useState<{
     isOpen: boolean;
     file: string;
     service: string;
-  }>({ isOpen: false, file: '', service: 'income-assessment-service' });
+  }>({ isOpen: false, file: '', service: '' });
 
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -161,11 +127,15 @@ function DashboardApp() {
 
       try {
         const remoteServices = await apiClient.listServices();
-        if (remoteServices && remoteServices.length > 0) {
+        if (remoteServices) {
           setServices(remoteServices);
+          setSelectedService((prev) => {
+            if (prev && remoteServices.some((s) => s.id === prev)) return prev;
+            return remoteServices.length > 0 ? remoteServices[0].id : '';
+          });
         }
       } catch {
-        // Keep default services if fetch fails
+        // Keep current services if fetch fails
       }
 
       try {
@@ -462,124 +432,70 @@ function DashboardApp() {
               className="flex items-center text-left group cursor-pointer focus:outline-none"
               title="Return to Home"
             >
-              <ContextFoundryLogo isBankingStaff={isBankingStaff} />
+              <ContextFoundryLogo />
             </button>
             <span className="text-[10px] font-bold tracking-wider uppercase hidden xl:inline-block border-l border-slate-200 pl-2.5 self-center py-0.5 text-slate-400">
-              {isBankingStaff ? 'Banking & Wealth Workspace' : 'Engineering Intelligence'}
+              Engineering Intelligence
             </span>
           </div>
 
-          {/* Center Mode Switcher: Role-Based Segregated Experience (Option B) */}
+          {/* Center Mode Switcher: Dev Chat & Knowledge Cafe */}
           <div className="flex items-center bg-slate-100/90 p-1.5 rounded-full border border-slate-200/80 shadow-2xs gap-1">
-            {isBankingStaff ? (
-              <>
-                {/* Management / Banking Staff: Saathi + KT Sessions */}
-                <button
-                  onClick={() => setActiveMode('saathi')}
-                  className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                    activeMode === 'saathi'
-                      ? 'bg-gradient-to-r from-[#97144d] to-[#800e3e] text-white shadow-xs'
-                      : 'text-slate-500 hover:text-slate-900'
-                  }`}
-                >
-                  <HeartHandshake className="w-4 h-4" />
-                  <span>Saathi</span>
-                  <span
-                    className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider ${
-                      activeMode === 'saathi'
-                        ? 'bg-white/25 text-white'
-                        : 'bg-rose-100 text-[#97144d]'
-                    }`}
-                  >
-                    RM Handover
-                  </span>
-                </button>
+            <button
+              onClick={() => setActiveMode('chat')}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                activeMode === 'chat'
+                  ? 'bg-white text-slate-900 shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              <MessageSquare className="w-4 h-4" />
+              <span>Dev Chat</span>
+            </button>
 
-                <button
-                  onClick={() => setActiveMode('knowledge-cafe')}
-                  className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                    activeMode === 'knowledge-cafe'
-                      ? 'bg-[#f05a28] text-white shadow-xs'
-                      : 'text-slate-500 hover:text-slate-900'
-                  }`}
-                >
-                  <GraduationCap className="w-4 h-4" />
-                  <span>Knowledge Cafe</span>
-                  <span
-                    className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider ${
-                      activeMode === 'knowledge-cafe'
-                        ? 'bg-white/25 text-white'
-                        : 'bg-orange-100 text-[#f05a28]'
-                    }`}
-                  >
-                    KT
-                  </span>
-                </button>
-              </>
-            ) : (
-              <>
-                {/* Technical Team: Dev Chat + KT Sessions */}
-                <button
-                  onClick={() => setActiveMode('chat')}
-                  className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                    activeMode === 'chat'
-                      ? 'bg-white text-slate-900 shadow-xs'
-                      : 'text-slate-500 hover:text-slate-900'
-                  }`}
-                >
-                  <MessageSquare className="w-4 h-4" />
-                  <span>Dev Chat</span>
-                </button>
-
-                <button
-                  onClick={() => setActiveMode('knowledge-cafe')}
-                  className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
-                    activeMode === 'knowledge-cafe'
-                      ? 'bg-[#f05a28] text-white shadow-xs'
-                      : 'text-slate-500 hover:text-slate-900'
-                  }`}
-                >
-                  <GraduationCap className="w-4 h-4" />
-                  <span>Knowledge Cafe</span>
-                  <span
-                    className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider ${
-                      activeMode === 'knowledge-cafe'
-                        ? 'bg-white/25 text-white'
-                        : 'bg-orange-100 text-[#f05a28]'
-                    }`}
-                  >
-                    KT
-                  </span>
-                </button>
-              </>
-            )}
+            <button
+              onClick={() => setActiveMode('knowledge-cafe')}
+              className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                activeMode === 'knowledge-cafe'
+                  ? 'bg-[#f05a28] text-white shadow-xs'
+                  : 'text-slate-500 hover:text-slate-900'
+              }`}
+            >
+              <GraduationCap className="w-4 h-4" />
+              <span>Knowledge Cafe</span>
+              <span
+                className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider ${
+                  activeMode === 'knowledge-cafe'
+                    ? 'bg-white/25 text-white'
+                    : 'bg-orange-100 text-[#f05a28]'
+                }`}
+              >
+                KT
+              </span>
+            </button>
           </div>
 
           {/* Right Actions: Knowledge Ingest, History, New Chat, User */}
           <div className="flex items-center gap-2.5 sm:gap-3.5">
-            {/* Knowledge Ingestion Modal Trigger (Engineering only) */}
-            {!isBankingStaff && (
-              <button
-                onClick={() => setIsIngestionModalOpen(true)}
-                className="flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
-                title="Upload and stage documentation or courses"
-              >
-                <UploadCloud className="w-4 h-4 text-[#f05a28]" />
-                <span className="hidden md:inline">Upload Docs</span>
-              </button>
-            )}
+            {/* Knowledge Ingestion Modal Trigger */}
+            <button
+              onClick={() => setIsIngestionModalOpen(true)}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+              title="Upload and stage documentation or courses"
+            >
+              <UploadCloud className="w-4 h-4 text-[#f05a28]" />
+              <span className="hidden md:inline">Upload Docs</span>
+            </button>
 
-            {/* Conversation History Drawer Trigger (Engineering only) */}
-            {!isBankingStaff && (
-              <button
-                onClick={() => setIsHistoryDrawerOpen(true)}
-                className="flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
-                title="View conversation history"
-              >
-                <History className="w-4 h-4 text-slate-500" />
-                <span className="hidden md:inline">History</span>
-              </button>
-            )}
+            {/* Conversation History Drawer Trigger */}
+            <button
+              onClick={() => setIsHistoryDrawerOpen(true)}
+              className="flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+              title="View conversation history"
+            >
+              <History className="w-4 h-4 text-slate-500" />
+              <span className="hidden md:inline">History</span>
+            </button>
 
             {/* Share Button when conversation is active */}
             {currentConversationId && isChatActive && (
@@ -608,17 +524,17 @@ function DashboardApp() {
             <div className="flex items-center gap-2.5 pl-3 sm:pl-4 border-l border-slate-200 ml-1">
               <div
                 className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-50 border border-slate-200/80 text-xs"
-                title={`Signed in as ${user?.email} (${isBankingStaff ? 'Banking & Wealth' : 'Technical Team'})`}
+                title={`Signed in as ${user?.email} (Engineering Team)`}
               >
-                <span className={`w-5 h-5 rounded-full ${isBankingStaff ? 'bg-[#97144d]' : 'bg-rose-600'} text-white font-bold text-[10px] flex items-center justify-center uppercase shadow-xs`}>
-                  {user?.name ? user.name.charAt(0) : (isBankingStaff ? 'B' : 'E')}
+                <span className="w-5 h-5 rounded-full bg-[#f05a28] text-white font-bold text-[10px] flex items-center justify-center uppercase shadow-xs">
+                  {user?.name ? user.name.charAt(0) : 'E'}
                 </span>
                 <div className="flex flex-col text-left">
                   <span className="font-semibold text-slate-700 max-w-[120px] truncate hidden md:inline leading-tight">
                     {user?.name || user?.email}
                   </span>
                   <span className="text-[9px] font-bold text-slate-400 uppercase hidden md:inline leading-none">
-                    {isBankingStaff ? 'Banking Staff' : 'Engineer'}
+                    {user?.role || 'Engineer'}
                   </span>
                 </div>
               </div>
@@ -630,7 +546,7 @@ function DashboardApp() {
                   logout();
                 }}
                 className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
-                title="Sign out of FC Central"
+                title="Sign out of Dev Central"
               >
                 <LogOut className="w-3.5 h-3.5" />
                 <span className="hidden sm:inline">Logout</span>
@@ -661,13 +577,12 @@ function DashboardApp() {
           </div>
         )}
 
-        {/* Dynamic Body: Saathi vs Knowledge Cafe vs Chat / Home Screen */}
-        {activeMode === 'saathi' ? (
-          <SaathiView />
-        ) : activeMode === 'knowledge-cafe' ? (
+        {/* Dynamic Body: Knowledge Cafe vs Chat / Home Screen */}
+        {activeMode === 'knowledge-cafe' ? (
           <KnowledgeCafeView
             selectedModel={selectedModel}
             userRole={user?.role}
+            services={services}
             onViewSource={(file, service) => {
               setActiveSourceModal({
                 isOpen: true,
@@ -708,6 +623,63 @@ function DashboardApp() {
                 <span className="font-semibold text-slate-700">integrations</span> — straight from your service documentation.
               </p>
 
+              {/* Empty State Banner if no microservices or no files are ingested for the selected service */}
+              {(() => {
+                if (services.length === 0) {
+                  return (
+                    <div className="w-full mb-5 p-4 rounded-2xl bg-orange-50/90 border border-orange-200/90 text-left flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 rounded-xl bg-white text-[#f05a28] shadow-2xs shrink-0 mt-0.5 sm:mt-0">
+                          <UploadCloud className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-xs text-slate-900">
+                            No microservices registered yet
+                          </h4>
+                          <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                            Register your first microservice and upload Kotlin (<code className="font-mono text-slate-700">.kt</code>), Java (<code className="font-mono text-slate-700">.java</code>), Python (<code className="font-mono text-slate-700">.py</code>), Markdown (<code className="font-mono text-slate-700">.md</code>), PDF (<code className="font-mono text-slate-700">.pdf</code>), or a ZIP archive.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setIsIngestionModalOpen(true)}
+                        className="px-4 py-2 bg-[#f05a28] hover:bg-[#d94b1c] text-white text-xs font-bold rounded-xl shadow-2xs transition-colors shrink-0 cursor-pointer"
+                      >
+                        + Add Microservice
+                      </button>
+                    </div>
+                  );
+                }
+                const activeSvc = services.find((s) => s.id === selectedService);
+                const hasDocs = activeSvc ? (activeSvc.doc_count !== undefined ? activeSvc.doc_count > 0 : activeSvc.has_indexed_data) : true;
+                if (!hasDocs) {
+                  return (
+                    <div className="w-full mb-5 p-4 rounded-2xl bg-orange-50/90 border border-orange-200/90 text-left flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+                      <div className="flex items-start gap-3">
+                        <div className="p-2 rounded-xl bg-white text-[#f05a28] shadow-2xs shrink-0 mt-0.5 sm:mt-0">
+                          <UploadCloud className="w-5 h-5" />
+                        </div>
+                        <div>
+                          <h4 className="font-bold text-xs text-slate-900">
+                            No knowledge indexed yet for <span className="font-mono text-[#f05a28]">{selectedService}</span>
+                          </h4>
+                          <p className="text-[11px] text-slate-500 mt-0.5 leading-relaxed">
+                            Upload Kotlin (<code className="font-mono text-slate-700">.kt</code>), Java (<code className="font-mono text-slate-700">.java</code>), Python (<code className="font-mono text-slate-700">.py</code>), author custom Markdown (<code className="font-mono text-slate-700">.md</code>), or upload a PDF/ZIP archive to ground the AI.
+                          </p>
+                        </div>
+                      </div>
+                      <button
+                        onClick={() => setIsIngestionModalOpen(true)}
+                        className="px-4 py-2 bg-[#f05a28] hover:bg-[#d94b1c] text-white text-xs font-bold rounded-xl shadow-2xs transition-colors shrink-0 cursor-pointer"
+                      >
+                        Upload Code & Docs
+                      </button>
+                    </div>
+                  );
+                }
+                return null;
+              })()}
+
               {/* Central Input Box Container */}
               <div className="w-full bg-white rounded-2xl border border-slate-200 shadow-xs p-4 mb-8 transition-all focus-within:border-slate-300 focus-within:shadow-md">
                 {/* Top Row: Context Selectors (SERVICE + MODEL) */}
@@ -718,19 +690,32 @@ function DashboardApp() {
                     </span>
                     <div className="relative">
                       <select
-                        value={selectedService}
-                        onChange={(e) => setSelectedService(e.target.value)}
+                        value={selectedService || ''}
+                        onChange={(e) => {
+                          if (e.target.value === '__add_new__') {
+                            setIsIngestionModalOpen(true);
+                          } else {
+                            setSelectedService(e.target.value);
+                          }
+                        }}
                         className="appearance-none bg-slate-100 hover:bg-slate-200/70 text-slate-700 text-xs font-semibold pl-2.5 pr-6 py-1 rounded-lg border border-slate-200/60 focus:outline-none cursor-pointer"
                       >
+                        {services.length === 0 && (
+                          <option value="" disabled>
+                            No services yet
+                          </option>
+                        )}
                         {services.map((s) => (
                           <option key={s.id} value={s.id}>
-                            {s.name}
+                            {s.name} {s.doc_count !== undefined ? `(${s.doc_count})` : ''}
                           </option>
                         ))}
+                        <option value="__add_new__">+ Add Microservice...</option>
                       </select>
                       <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2 top-2 pointer-events-none" />
                     </div>
                   </div>
+
 
                   {models.length > 0 && (
                     <div className="flex items-center gap-1.5">
@@ -766,17 +751,17 @@ function DashboardApp() {
                       handleStartChat();
                     }
                   }}
-                  placeholder={`Ask about ${selectedService}...`}
+                  placeholder={selectedService ? `Ask about ${selectedService}...` : 'Register a microservice first to start asking questions...'}
                   rows={2}
-                  disabled={isLoading}
-                  className="w-full resize-none bg-transparent text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none py-1"
+                  disabled={isLoading || !selectedService}
+                  className="w-full resize-none bg-transparent text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none py-1 disabled:cursor-not-allowed"
                 />
 
                 {/* Bottom Row: Circular Orange Up-Arrow Send Button */}
                 <div className="flex justify-end pt-1">
                   <button
                     onClick={() => handleStartChat()}
-                    disabled={!queryInput.trim() || isLoading}
+                    disabled={!queryInput.trim() || isLoading || !selectedService}
                     type="button"
                     className={`w-7 h-7 rounded-full flex items-center justify-center transition-all cursor-pointer ${
                       queryInput.trim() && !isLoading
@@ -996,14 +981,21 @@ function DashboardApp() {
                     <div className="relative">
                       <select
                         value={selectedService}
-                        onChange={(e) => setSelectedService(e.target.value)}
+                        onChange={(e) => {
+                          if (e.target.value === '__add_new__') {
+                            setIsIngestionModalOpen(true);
+                          } else {
+                            setSelectedService(e.target.value);
+                          }
+                        }}
                         className="appearance-none bg-slate-100 hover:bg-slate-200/70 text-slate-700 text-xs font-semibold pl-2.5 pr-6 py-1 rounded-lg border border-slate-200/60 focus:outline-none cursor-pointer"
                       >
                         {services.map((s) => (
                           <option key={s.id} value={s.id}>
-                            {s.name}
+                            {s.name} {s.doc_count !== undefined ? `(${s.doc_count})` : ''}
                           </option>
                         ))}
+                        <option value="__add_new__">+ Add Microservice...</option>
                       </select>
                       <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2 top-2 pointer-events-none" />
                     </div>
@@ -1086,6 +1078,14 @@ function DashboardApp() {
         onClose={() => setIsIngestionModalOpen(false)}
         service={selectedService}
         services={services}
+        onServiceCreated={(newService) => {
+          setServices((prev) => [...prev, newService]);
+          setSelectedService(newService.id);
+        }}
+        onSuccess={async () => {
+          const updated = await apiClient.listServices();
+          if (updated) setServices(updated);
+        }}
       />
 
       {/* Conversation History Drawer */}
@@ -1114,7 +1114,7 @@ function DashboardApp() {
             setActiveSourceModal({
               isOpen: false,
               file: '',
-              service: 'income-assessment-service',
+              service: '',
             })
           }
           file={activeSourceModal.file}

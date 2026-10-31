@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
-from typing import List, Optional
-from pydantic import Field
+from typing import Any, List, Optional, Union
+from pydantic import Field, field_validator
 
 try:
     from dotenv import load_dotenv
@@ -44,13 +44,25 @@ class Settings(BaseSettings):
     host: str = Field(default_factory=lambda: os.getenv("HOST", "0.0.0.0"))
     port: int = Field(default_factory=lambda: int(os.getenv("PORT", "8000")))
     environment: str = Field(default_factory=lambda: os.getenv("ENVIRONMENT", "development"))
-    cors_origins: List[str] = Field(
-        default_factory=lambda: [
-            orig.strip()
-            for orig in os.getenv("CORS_ORIGINS", "http://localhost:5173,http://localhost:3000,*").split(",")
-            if orig.strip()
-        ]
+    cors_origins: Union[List[str], str] = Field(
+        default=["http://localhost:5173", "http://localhost:3000"]
     )
+
+    @field_validator("cors_origins", mode="before")
+    @classmethod
+    def parse_cors_origins(cls, v: Any) -> List[str]:
+        if isinstance(v, str):
+            import json
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return [x for x in parsed if x != "*"]
+            except Exception:
+                pass
+            return [orig.strip() for orig in v.split(",") if orig.strip() and orig.strip() != "*"]
+        elif isinstance(v, list):
+            return [x for x in v if x != "*"]
+        return ["http://localhost:5173", "http://localhost:3000"]
 
     # Persistence configuration
     database_path: str = Field(

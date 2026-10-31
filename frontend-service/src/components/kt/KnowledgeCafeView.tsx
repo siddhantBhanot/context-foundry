@@ -6,11 +6,13 @@ import { CurriculumSidebar } from './CurriculumSidebar';
 import { LessonViewer } from './LessonViewer';
 import { LessonDoubtDrawer } from './LessonDoubtDrawer';
 import { CourseCompletionModal } from './CourseCompletionModal';
-import type { CourseDetail, CourseSummary, LessonDetail, LessonDoubt } from '@/types';
+import { CreateTutorialModal } from './CreateTutorialModal';
+import type { CourseDetail, CourseSummary, LessonDetail, LessonDoubt, Microservice } from '@/types';
 
 interface KnowledgeCafeViewProps {
   selectedModel: string;
   userRole?: 'developer' | 'banking_staff';
+  services?: Microservice[];
   onViewSource: (file: string, service?: string) => void;
   onExploreInChat: (service: string) => void;
 }
@@ -18,6 +20,7 @@ interface KnowledgeCafeViewProps {
 export function KnowledgeCafeView({
   selectedModel,
   userRole,
+  services: initialServices,
   onViewSource,
   onExploreInChat,
 }: KnowledgeCafeViewProps) {
@@ -32,6 +35,18 @@ export function KnowledgeCafeView({
   const [isDoubtDrawerOpen, setIsDoubtDrawerOpen] = useState<boolean>(false);
   const [isAskingDoubt, setIsAskingDoubt] = useState<boolean>(false);
   const [isCompletionModalOpen, setIsCompletionModalOpen] = useState<boolean>(false);
+  const [isCreateTutorialOpen, setIsCreateTutorialOpen] = useState<boolean>(false);
+  const [servicesList, setServicesList] = useState<Microservice[]>(initialServices || []);
+
+  useEffect(() => {
+    if (initialServices && initialServices.length > 0) {
+      setServicesList(initialServices);
+    } else {
+      apiClient.listServices().then((svcs) => {
+        if (svcs && svcs.length > 0) setServicesList(svcs);
+      }).catch(console.error);
+    }
+  }, [initialServices]);
 
   // Load course catalog
   const loadCourses = async () => {
@@ -312,13 +327,27 @@ export function KnowledgeCafeView({
   // If viewing catalog
   if (!activeCourseId || !activeCourse) {
     return (
-      <CourseCatalog
-        courses={courses}
-        isLoading={isLoadingCatalog}
-        userRole={userRole}
-        onSelectCourse={handleSelectCourse}
-        onRestartCourse={handleRestartCourse}
-      />
+      <>
+        <CourseCatalog
+          courses={courses}
+          isLoading={isLoadingCatalog}
+          userRole={userRole}
+          onSelectCourse={handleSelectCourse}
+          onRestartCourse={handleRestartCourse}
+          onCreateCourse={() => setIsCreateTutorialOpen(true)}
+        />
+        <CreateTutorialModal
+          isOpen={isCreateTutorialOpen}
+          onClose={() => setIsCreateTutorialOpen(false)}
+          services={servicesList}
+          onSuccess={async (newCourse) => {
+            await loadCourses();
+            if (newCourse?.id) {
+              handleSelectCourse(newCourse.id);
+            }
+          }}
+        />
+      </>
     );
   }
 

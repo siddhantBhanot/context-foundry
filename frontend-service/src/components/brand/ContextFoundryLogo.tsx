@@ -4,14 +4,12 @@ interface ContextFoundryLogoProps {
   className?: string;
   showText?: boolean;
   size?: 'sm' | 'md' | 'lg';
-  isBankingStaff?: boolean;
 }
 
 export const ContextFoundryLogo: React.FC<ContextFoundryLogoProps> = ({
   className = '',
   showText = true,
   size = 'md',
-  isBankingStaff = false,
 }) => {
   const iconSize = size === 'sm' ? 28 : size === 'lg' ? 40 : 34;
 
@@ -56,12 +54,12 @@ export const ContextFoundryLogo: React.FC<ContextFoundryLogoProps> = ({
         <div className="flex flex-col text-left">
           <div className="flex items-center text-slate-900 font-extrabold tracking-tight leading-none text-base md:text-lg">
             <span>Context</span>
-            <span className={isBankingStaff ? 'text-[#861f41]' : 'text-[#f05a28]'}>
+            <span className="text-[#f05a28]">
               Foundry
             </span>
           </div>
           <span className="text-[9px] font-semibold tracking-wider text-slate-400 uppercase mt-0.5">
-            {isBankingStaff ? 'Saathi · Client Continuity' : 'Dev Central · Eng Intelligence'}
+            Dev Central · Eng Intelligence
           </span>
         </div>
       )}

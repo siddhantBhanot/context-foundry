@@ -127,3 +127,40 @@ class EnrollResponse(BaseModel):
     enrollment: CourseEnrollmentSummary
     course: CourseDetailResponse
     current_lesson: Optional[LessonSummarySchema] = None
+
+
+class QuizQuestionRequest(BaseModel):
+    question: str
+    options: List[str]
+    correct_option_index: int = 0
+    explanation: Optional[str] = ""
+
+
+class CreateLessonRequest(BaseModel):
+    title: str = Field(..., min_length=2, max_length=128)
+    summary: str = Field(..., max_length=300)
+    content: Optional[str] = Field("", description="Full markdown lesson content or pedagogical notes")
+    quiz_questions: Optional[List[QuizQuestionRequest]] = Field(default_factory=list)
+
+
+class CreateCourseRequest(BaseModel):
+    id: Optional[str] = Field(None, max_length=64, description="Optional custom course slug")
+    title: str = Field(..., min_length=3, max_length=128)
+    description: str = Field(..., min_length=5, max_length=1000)
+    target_service: str = Field(..., min_length=2, max_length=64)
+    difficulty: str = Field(default="Intermediate")
+    estimated_duration: str = Field(default="45 mins")
+    lessons: List[CreateLessonRequest] = Field(..., min_length=1)
+
+
+class CreateCourseResponse(BaseModel):
+    id: str
+    title: str
+    description: str
+    target_service: str
+    difficulty: str
+    estimated_duration: str
+    total_lessons: int
+    indexed_chunks: int = 0
+    message: str
+

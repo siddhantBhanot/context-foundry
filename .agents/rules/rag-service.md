@@ -31,13 +31,15 @@ Keep RAG-specific implementation out of the frontend.
 
 Use:
 
--   Python
--   LlamaIndex
--   Qdrant Cloud
--   Amazon Bedrock
--   LLM models through Amazon Bedrock
+-   Python 3.12+
+-   Qdrant Cloud (primary vector storage with Hybrid Dense + Sparse BM25 RRF search & payload filtering)
+-   Qdrant FastEmbed (`jinaai/jina-embeddings-v2-base-code`, 768-dim, 8192-token context + `Qdrant/bm25` sparse vectors) for fast local code-aware embeddings with zero cloud API keys
+-   Groq Cloud (OpenAI-compatible high-speed inference) as primary LLM provider
+-   LlamaIndex Core
+-   PyPDF for document parsing
+-   AWS Bedrock (optional fallback/alternative provider, not required)
 
-The RAG implementation must remain provider-independent at the
+The RAG implementation must remain strictly provider-independent at the
 application boundary.
 
 Future providers may include:
@@ -70,9 +72,9 @@ class LLMProvider(Protocol):
 Implementations may include:
 
 ``` text
-BedrockLLMProvider
-GeminiLLMProvider
-GroqLLMProvider
+GroqLLMProvider (primary active provider, e.g. openai/gpt-oss-120b)
+BedrockLLMProvider (optional fallback)
+GeminiLLMProvider (optional)
 ```
 
 Embedding providers should follow a similar boundary:
@@ -86,10 +88,11 @@ class EmbeddingProvider(Protocol):
         ...
 ```
 
-Initial implementation:
+Active implementation:
 
 ``` text
-BedrockEmbeddingProvider
+FastEmbedProvider (sentence-transformers/all-MiniLM-L6-v2, 384 dimensions)
+BedrockEmbeddingProvider (optional fallback)
 ```
 
 Vector storage must also be abstracted:
@@ -152,21 +155,29 @@ retrieval, prompting, LLM calls, logging, and response formatting.
 
 ------------------------------------------------------------------------
 
-# 5. Initial Knowledge Scope
+# 5. Knowledge Scope & Supported Formats
 
-The initial RAG knowledge base is limited to:
+The platform supports dynamic, multi-microservice knowledge bases.
+Users can create new microservices and ingest code and documentation on demand.
 
-`income-assessment-service`
+Supported Ingestion Formats:
 
-Knowledge sources:
+1.  **Kotlin, Java, and Python Source Code (`.kt`, `.kts`, `.java`, `.py`)**:
+    Parsed via multi-language structural chunkers (`KotlinChunker`, `JavaChunker`, `PythonChunker`), extracting package/module, imports, class/interface definitions, constructor/field dependencies, methods/functions, HTTP endpoints/decorators, and exact line ranges (`#L{start}-L{end}`). Prepend compact structural scope headers (`File | Package | Imports | Collaborators`) to each chunk.
 
-1.  Curated Markdown documentation
-2.  Spring Boot + Kotlin source code
+2.  **Markdown Documentation (`.md`, `.markdown`)**:
+    Uploaded user-written or repository Markdown files parsed via `MarkdownChunker`, preserving heading hierarchy (`#`, `##`, `###`), code blocks, and section context.
 
-Do not assume the source code is Java. The microservice is implemented
-in Kotlin.
+3.  **PDF Documents (`.pdf`)**:
+    Parsed via `PyPDF`, formatted into paginated Markdown (`## Page N`), and processed into contextual chunks.
 
-The architecture must allow additional microservices to be added later.
+4.  **ZIP Archives (`.zip`)**:
+    Unpacked safely (with zip-bomb byte/entry checks and path traversal protection), recursively extracting all inner `.kt`, `.kts`, `.java`, `.py`, `.md`, and `.pdf` files.
+
+5.  **Microservice RepoMap & Dependency Graph (`_repo_map.json`)**:
+    Automatically synthesized during ingestion to provide a holistic blueprint of all files, classes, endpoints, Markdown sections, and cross-component dependencies, powering macro-level architectural context and 1-hop dependency expansion during retrieval.
+
+Every chunk must be tagged with its corresponding `service` identifier.
 
 ------------------------------------------------------------------------
 
@@ -381,11 +392,13 @@ Provider and model selection must be configuration-driven.
 Examples:
 
 ``` text
-LLM_PROVIDER=bedrock
-LLM_MODEL=...
-EMBEDDING_PROVIDER=bedrock
-EMBEDDING_MODEL=qdrant-cloud
+LLM_PROVIDER=groq
+LLM_MODEL=openai/gpt-oss-120b
+EMBEDDING_PROVIDER=fastembed
+EMBEDDING_MODEL=sentence-transformers/all-MiniLM-L6-v2
 VECTOR_STORE=qdrant
+QDRANT_URL=https://<cluster-id>.aws.cloud.qdrant.io:6333
+QDRANT_COLLECTION=engineering_knowledge_base
 ```
 
 Do not hardcode provider credentials, URLs, or model configuration.

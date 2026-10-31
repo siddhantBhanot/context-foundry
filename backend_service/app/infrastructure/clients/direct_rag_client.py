@@ -11,6 +11,8 @@ _project_root = Path(__file__).resolve().parents[4]
 if str(_project_root) not in sys.path:
     sys.path.insert(0, str(_project_root))
 
+_storage_dir = _project_root / "backend_service" / "data" / "storage" / "services"
+
 from backend_service.app.domain.exceptions.base import (
     DomainException,
     RAGServiceException,
@@ -33,13 +35,15 @@ class DirectRAGClient(RAGClientProtocol):
         self._kt_engine = None
         self._course_indexer = None
         self._indexed_courses: set = set()
+        self._initialized_env_mtime: float = 0.0
         self._init_rag()
 
     def _init_rag(self) -> None:
         try:
-            from rag_service.infrastructure.config import get_settings as get_rag_settings
+            from rag_service.infrastructure.config import _current_env_mtime, get_settings as get_rag_settings
             from rag_service.infrastructure.providers.bedrock_embedding import BedrockEmbeddingProvider
             from rag_service.infrastructure.providers.bedrock_llm import BedrockLLMProvider
+            from rag_service.infrastructure.providers.gemini_llm import GeminiLLMProvider
             from rag_service.infrastructure.providers.openai_llm import OpenAiClientProvider
             from rag_service.infrastructure.providers.qdrant_embedding import QdrantEmbeddingProvider
             from rag_service.infrastructure.providers.qdrant_store import QdrantVectorStoreAdapter
@@ -49,12 +53,20 @@ class DirectRAGClient(RAGClientProtocol):
             from rag_service.prompts.loader import PromptLoader
 
             settings = get_rag_settings()
+            self._initialized_env_mtime = _current_env_mtime()
+            raw_bedrock_token = (settings.aws_bearer_token_bedrock or "").strip()
+            has_valid_bedrock_token = bool(
+                raw_bedrock_token
+                and not raw_bedrock_token.startswith("your_")
+                and raw_bedrock_token.startswith("ABSK")
+            )
             has_aws = bool(
-                settings.aws_bearer_token_bedrock
+                has_valid_bedrock_token
                 or (settings.aws_access_key_id and settings.aws_secret_access_key)
             )
             has_openai = bool(settings.openai_api_key)
             has_groq = bool(settings.groq_api_key)
+            has_gemini = settings.has_valid_gemini_key()
 
             # Embedder: Use Bedrock if explicitly configured and AWS credentials exist; otherwise use Qdrant FastEmbed
             if settings.embedding_provider == "bedrock" and has_aws:
@@ -69,27 +81,45 @@ class DirectRAGClient(RAGClientProtocol):
             # LLM Provider with Multi-Provider Routing
             bedrock_provider = BedrockLLMProvider(settings) if has_aws else None
             openai_provider = OpenAiClientProvider(settings) if has_openai else None
+            gemini_provider = GeminiLLMProvider(settings) if has_gemini else None
 
-            if bedrock_provider and openai_provider:
-                default_p = openai_provider if has_groq else bedrock_provider
+            active_providers: Dict[str, Any] = {}
+            if openai_provider:
+                active_providers["groq"] = openai_provider
+                active_providers["openai"] = openai_provider
+            if gemini_provider:
+                active_providers["gemini"] = gemini_provider
+            if bedrock_provider:
+                active_providers["bedrock"] = bedrock_provider
+
+            if active_providers:
+                pref_provider = (settings.llm_provider or "").lower()
+                if pref_provider == "gemini" and gemini_provider:
+                    default_p = gemini_provider
+                elif pref_provider == "bedrock" and bedrock_provider:
+                    default_p = bedrock_provider
+                elif openai_provider:
+                    default_p = openai_provider
+                elif gemini_provider:
+                    default_p = gemini_provider
+                else:
+                    default_p = bedrock_provider
+
                 multi_adapter = MultiProviderLLMAdapter(
                     default_provider=default_p,
-                    providers={
-                        "groq": openai_provider,
-                        "openai": openai_provider,
-                        "bedrock": bedrock_provider,
-                    },
+                    providers=active_providers,
                 )
-                for bm in settings.get_configured_bedrock_models():
-                    multi_adapter.register_model(bm["id"], "bedrock")
-                multi_adapter.register_model(settings.bedrock_llm_model_id, "bedrock")
+                if bedrock_provider:
+                    for bm in settings.get_configured_bedrock_models():
+                        multi_adapter.register_model(bm["id"], "bedrock")
+                    multi_adapter.register_model(settings.bedrock_llm_model_id, "bedrock")
+                if gemini_provider:
+                    for gm in settings.get_configured_gemini_models():
+                        multi_adapter.register_model(gm["id"], "gemini")
+                    multi_adapter.register_model(settings.gemini_model_id, "gemini")
                 llm_provider = multi_adapter
-            elif bedrock_provider:
-                llm_provider = bedrock_provider
-            elif openai_provider:
-                llm_provider = openai_provider
             else:
-                # Standalone fallback if neither is present
+                # Standalone fallback if no provider is configured
                 from rag_service.run_local import LocalSimulatedLLM
                 llm_provider = LocalSimulatedLLM()
 
@@ -136,7 +166,13 @@ class DirectRAGClient(RAGClientProtocol):
             self._course_indexer = None
 
     def _ensure_initialized(self):
-        if self._pipeline is None or self._kt_engine is None:
+        from rag_service.infrastructure.config import _current_env_mtime
+        curr_mtime = _current_env_mtime()
+        if (
+            self._pipeline is None
+            or self._kt_engine is None
+            or (curr_mtime > 0 and curr_mtime != self._initialized_env_mtime)
+        ):
             self._init_rag()
         if self._pipeline is None:
             raise RAGServiceException(
@@ -145,17 +181,52 @@ class DirectRAGClient(RAGClientProtocol):
 
     async def list_models(self) -> List[dict]:
         """Discover available LLM models strictly based on active server configuration."""
-        from rag_service.infrastructure.config import get_settings
+        from rag_service.infrastructure.config import _current_env_mtime, get_settings
         settings = get_settings()
+        if _current_env_mtime() != self._initialized_env_mtime:
+            self._init_rag()
 
         has_groq = bool(settings.groq_api_key)
         has_openai = bool(settings.openai_api_key)
+        has_gemini = settings.has_valid_gemini_key()
+        raw_bedrock_token = (settings.aws_bearer_token_bedrock or "").strip()
+        has_valid_bedrock_token = bool(
+            raw_bedrock_token
+            and not raw_bedrock_token.startswith("your_")
+            and raw_bedrock_token.startswith("ABSK")
+        )
         has_aws = bool(
-            settings.aws_bearer_token_bedrock
+            has_valid_bedrock_token
             or (settings.aws_access_key_id and settings.aws_secret_access_key)
         )
 
         models: List[dict] = []
+
+        if has_gemini:
+            configured_gemini = settings.get_configured_gemini_models()
+            if configured_gemini:
+                models.extend(configured_gemini)
+            else:
+                models.extend([
+                    {
+                        "id": "gemini-2.5-flash",
+                        "name": "Gemini 2.5 Flash",
+                        "provider": "gemini",
+                        "description": "Fast 1M-context reasoning and coding model",
+                    },
+                    {
+                        "id": "gemini-2.5-pro",
+                        "name": "Gemini 2.5 Pro",
+                        "provider": "gemini",
+                        "description": "Complex architectural reasoning and coding model (1M context)",
+                    },
+                    {
+                        "id": "gemini-3.7-flash",
+                        "name": "Gemini 3.7 Flash",
+                        "provider": "gemini",
+                        "description": "Next-gen fast 1M-context agentic and multimodal model",
+                    },
+                ])
 
         if has_groq or (has_openai and "groq" in (settings.openai_base_url or "").lower()):
             models.extend([
@@ -251,8 +322,13 @@ class DirectRAGClient(RAGClientProtocol):
 
         # Determine default model
         target_default = None
-        if settings.llm_provider and settings.llm_provider.lower() == "bedrock" and has_aws:
+        pref_provider = (settings.llm_provider or "").lower()
+        if pref_provider == "gemini" and has_gemini:
+            target_default = settings.gemini_model_id
+        elif pref_provider == "bedrock" and has_aws:
             target_default = settings.bedrock_llm_model_id
+        elif has_gemini and not (has_groq or has_openai):
+            target_default = settings.gemini_model_id
         elif has_groq or has_openai:
             target_default = settings.openai_model_id
 
@@ -277,12 +353,7 @@ class DirectRAGClient(RAGClientProtocol):
         top_k: int = 5,
         model: Optional[str] = None,
     ) -> RAGQueryResult:
-        if self._pipeline is None:
-            self._init_rag()
-        if self._pipeline is None:
-            raise RAGServiceException(
-                "RAG pipeline could not be initialized. Please check rag_service dependencies and configuration."
-            )
+        self._ensure_initialized()
 
         # Validate requested model if explicitly provided
         if model:
@@ -404,20 +475,70 @@ class DirectRAGClient(RAGClientProtocol):
         service: str,
         file_path: str,
     ) -> DocumentView:
-        from rag_service.infrastructure.document_reader import DocumentReader
         from backend_service.app.domain.models.knowledge import DocumentView
+        from backend_service.app.domain.exceptions.base import EntityNotFoundException
 
-        sample_dir = _project_root / "rag_service" / "sample_data"
-        reader = DocumentReader(data_dir=sample_dir)
-        doc = reader.read_document(service=service, file_path=file_path)
-        return DocumentView(
-            file=doc.file,
-            service=doc.service,
-            content=doc.content,
-            content_type=doc.content_type,
-            total_lines=doc.total_lines,
-            size_bytes=doc.size_bytes,
-        )
+        clean_path = file_path.strip().lstrip("/\\")
+
+        # 1. Search in dedicated storage
+        candidates = [
+            _storage_dir / service / clean_path,
+            _storage_dir / service / "pending" / clean_path,
+        ]
+
+        found_path: Optional[Path] = None
+        for c in candidates:
+            if c.is_file():
+                found_path = c
+                break
+
+        # If not found by direct relative path, search by filename
+        if not found_path:
+            filename = Path(clean_path).name
+            base = _storage_dir / service
+            if base.is_dir():
+                for p in base.rglob("*"):
+                    if p.is_file() and p.name == filename:
+                        found_path = p
+                        break
+
+        if found_path and found_path.is_file():
+            stat = found_path.stat()
+            suffix = found_path.suffix.lower()
+            if suffix == ".pdf":
+                try:
+                    from pypdf import PdfReader
+                    reader = PdfReader(str(found_path))
+                    pages = []
+                    for i, page in enumerate(reader.pages):
+                        txt = page.extract_text() or ""
+                        pages.append(f"## Page {i + 1}\n\n{txt.strip()}")
+                    content = "\n\n---\n\n".join(pages)
+                except Exception as e:
+                    content = f"Error reading PDF content: {e}"
+                content_type = "pdf"
+            else:
+                content = found_path.read_text(encoding="utf-8", errors="replace")
+                if suffix in {".kt", ".kts"}:
+                    content_type = "kotlin"
+                elif suffix == ".java":
+                    content_type = "java"
+                elif suffix == ".py":
+                    content_type = "python"
+                else:
+                    content_type = "markdown"
+
+            lines = content.splitlines()
+            return DocumentView(
+                file=found_path.name,
+                service=service,
+                content=content,
+                content_type=content_type,
+                total_lines=len(lines),
+                size_bytes=stat.st_size,
+            )
+
+        raise EntityNotFoundException(entity_name="Document", entity_id=f"{service}/{file_path}")
 
     async def upload_document(
         self,
@@ -433,12 +554,12 @@ class DirectRAGClient(RAGClientProtocol):
 
         safe_name = Path(file_name).name
         suffix = Path(safe_name).suffix.lower()
-        if suffix not in {".md", ".markdown", ".pdf", ".kt", ".kts", ".zip"}:
+        if suffix not in {".md", ".markdown", ".pdf", ".kt", ".kts", ".java", ".py", ".zip"}:
             raise ValueError(
-                f"Unsupported file format '{suffix}'. Supported formats: .kt, .kts, .md, .pdf, or .zip archive."
+                f"Unsupported file format '{suffix}'. Supported formats: .kt, .kts, .java, .py, .md, .pdf, or .zip archive."
             )
 
-        pending_dir = _project_root / "rag_service" / "sample_data" / service / "pending"
+        pending_dir = _storage_dir / service / "pending"
         pending_dir.mkdir(parents=True, exist_ok=True)
 
         if suffix == ".zip":
@@ -446,28 +567,41 @@ class DirectRAGClient(RAGClientProtocol):
             import zipfile
 
             extracted_files = []
+            MAX_ZIP_ENTRIES = 500
+            MAX_ZIP_EXTRACTED_BYTES = 50 * 1024 * 1024  # 50 MB
+
             try:
                 with zipfile.ZipFile(io.BytesIO(content_bytes)) as zf:
+                    if len(zf.infolist()) > MAX_ZIP_ENTRIES:
+                        raise ValueError(f"Archive contains too many entries (limit: {MAX_ZIP_ENTRIES}).")
+                    total_uncompressed = sum(m.file_size for m in zf.infolist())
+                    if total_uncompressed > MAX_ZIP_EXTRACTED_BYTES:
+                        raise ValueError(
+                            f"Archive uncompressed size exceeds limit of {MAX_ZIP_EXTRACTED_BYTES // (1024 * 1024)}MB."
+                        )
+
                     # Security check: zip-slip check
                     for member in zf.infolist():
                         p = Path(member.filename)
                         if p.is_absolute() or ".." in p.parts:
                             raise ValueError(f"Malicious zip entry detected: {member.filename}")
 
-                    allowed_inner = {".md", ".markdown", ".pdf", ".kt", ".kts"}
+                    allowed_inner = {".md", ".markdown", ".pdf", ".kt", ".kts", ".java", ".py"}
                     for member in zf.infolist():
                         if member.is_dir():
                             continue
                         inner_path = Path(member.filename)
                         if inner_path.suffix.lower() in allowed_inner and not inner_path.name.startswith("."):
-                            target_file = pending_dir / inner_path
+                            target_file = (pending_dir / inner_path).resolve()
+                            if not target_file.is_relative_to(pending_dir.resolve()):
+                                raise ValueError(f"Path traversal detected: {member.filename}")
                             target_file.parent.mkdir(parents=True, exist_ok=True)
                             target_file.write_bytes(zf.read(member.filename))
                             extracted_files.append(str(inner_path))
 
                 if not extracted_files:
                     raise ValueError(
-                        "No valid Kotlin source (.kt, .kts), Markdown (.md), or PDF (.pdf) files were found in the uploaded zip archive."
+                        "No valid Kotlin (.kt, .kts), Java (.java), Python (.py), Markdown (.md), or PDF (.pdf) files were found in the uploaded zip archive."
                     )
 
                 return {
@@ -503,49 +637,55 @@ class DirectRAGClient(RAGClientProtocol):
         if not service or not service_pattern.match(service):
             raise ValueError(f"Invalid service identifier: '{service}'")
 
-        service_dir = _project_root / "rag_service" / "sample_data" / service
-        if not service_dir.is_dir():
-            return []
-
         def _get_format(sfx: str) -> str:
             s = sfx.lower()
             if s == ".pdf":
                 return "PDF"
             if s in {".kt", ".kts"}:
                 return "KT"
+            if s == ".java":
+                return "JAVA"
+            if s == ".py":
+                return "PY"
             return "MD"
 
-        allowed_exts = {".md", ".markdown", ".pdf", ".kt", ".kts"}
+        allowed_exts = {".md", ".markdown", ".pdf", ".kt", ".kts", ".java", ".py"}
         results = []
+        seen_names = set()
 
-        # 1. Check pending directory (recursive)
-        pending_dir = service_dir / "pending"
-        if pending_dir.is_dir():
-            for p in pending_dir.rglob("*"):
-                if p.is_file() and p.suffix.lower() in allowed_exts:
+        base_dir = _storage_dir / service
+        if base_dir.is_dir():
+            # 1. Check pending directory
+            pending_dir = base_dir / "pending"
+            if pending_dir.is_dir():
+                for p in pending_dir.rglob("*"):
+                    if p.is_file() and p.suffix.lower() in allowed_exts:
+                        if p.name in seen_names:
+                            continue
+                        stat = p.stat()
+                        rel_path = str(p.relative_to(base_dir))
+                        results.append({
+                            "name": p.name,
+                            "path": rel_path,
+                            "service": service,
+                            "format": _get_format(p.suffix),
+                            "size_bytes": stat.st_size,
+                            "status": "pending",
+                            "modified_at": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
+                        })
+                        seen_names.add(p.name)
+
+            # 2. Check service root and subdirectories for ingested documents (excluding pending)
+            for p in base_dir.rglob("*"):
+                if (
+                    p.is_file()
+                    and p.suffix.lower() in allowed_exts
+                    and "pending" not in p.parts
+                ):
+                    if p.name in seen_names:
+                        continue
                     stat = p.stat()
-                    rel_path = str(p.relative_to(service_dir))
-                    results.append({
-                        "name": p.name,
-                        "path": rel_path,
-                        "service": service,
-                        "format": _get_format(p.suffix),
-                        "size_bytes": stat.st_size,
-                        "status": "pending",
-                        "modified_at": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
-                    })
-
-        # 2. Check service root and subdirectories for ingested documents (excluding pending)
-        seen_paths = set()
-        for p in service_dir.rglob("*"):
-            if (
-                p.is_file()
-                and p.suffix.lower() in allowed_exts
-                and "pending" not in p.parts
-            ):
-                stat = p.stat()
-                rel_path = str(p.relative_to(service_dir))
-                if rel_path not in seen_paths:
+                    rel_path = str(p.relative_to(base_dir))
                     results.append({
                         "name": p.name,
                         "path": rel_path,
@@ -555,7 +695,7 @@ class DirectRAGClient(RAGClientProtocol):
                         "status": "ingested",
                         "modified_at": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
                     })
-                    seen_paths.add(rel_path)
+                    seen_names.add(p.name)
 
         # Sort pending first, then by name
         results.sort(key=lambda x: (0 if x["status"] == "pending" else 1, x["name"].lower()))
@@ -572,41 +712,49 @@ class DirectRAGClient(RAGClientProtocol):
         if self._ingestion is None:
             raise RAGServiceException("RAG Ingestion pipeline could not be initialized.")
 
-        target_dir = (
-            Path(source_directory)
-            if source_directory
-            else _project_root / "rag_service" / "sample_data" / service
-        )
+        target_dirs = []
+        if source_directory:
+            target_dirs.append(Path(source_directory))
+        else:
+            storage_service = _storage_dir / service
+            storage_service.mkdir(parents=True, exist_ok=True)
+            target_dirs.append(storage_service)
 
         job = IngestionJob(
             id=str(uuid.uuid4()),
             service=service,
-            source_path=str(target_dir),
+            source_path=str(target_dirs[0]),
             status=IngestionStatus.PROCESSING,
         )
 
         try:
-            if not target_dir.exists():
-                job.status = IngestionStatus.FAILED
-                job.error_message = f"Source directory '{target_dir}' does not exist."
-                job.completed_at = datetime.now(timezone.utc)
-                return job
+            total_files = 0
+            total_chunks = 0
+            all_indexed_files = []
 
-            # Promote pending files to target_dir before ingestion
-            pending_dir = target_dir / "pending"
-            if pending_dir.is_dir():
-                for p in list(pending_dir.rglob("*")):
-                    if p.is_file() and p.suffix.lower() in {".md", ".markdown", ".pdf", ".kt", ".kts"}:
-                        rel = p.relative_to(pending_dir)
-                        dest = target_dir / rel
-                        dest.parent.mkdir(parents=True, exist_ok=True)
-                        shutil.move(str(p), str(dest))
-                shutil.rmtree(pending_dir, ignore_errors=True)
+            for target_dir in target_dirs:
+                if not target_dir.exists():
+                    continue
 
-            ingest_result = await self._ingestion.ingest_directory(target_dir, service=service)
-            job.total_files = ingest_result.get("total_files", 0)
-            job.total_chunks = ingest_result.get("total_chunks", 0)
-            job.files_indexed = [Path(f).name for f in ingest_result.get("files", [])]
+                # Promote pending files before ingestion
+                pending_dir = target_dir / "pending"
+                if pending_dir.is_dir():
+                    for p in list(pending_dir.rglob("*")):
+                        if p.is_file() and p.suffix.lower() in {".md", ".markdown", ".pdf", ".kt", ".kts", ".java", ".py"}:
+                            rel = p.relative_to(pending_dir)
+                            dest = target_dir / rel
+                            dest.parent.mkdir(parents=True, exist_ok=True)
+                            shutil.move(str(p), str(dest))
+                    shutil.rmtree(pending_dir, ignore_errors=True)
+
+                ingest_result = await self._ingestion.ingest_directory(target_dir, service=service)
+                total_files += ingest_result.get("total_files", 0)
+                total_chunks += ingest_result.get("total_chunks", 0)
+                all_indexed_files.extend([Path(f).name for f in ingest_result.get("files", [])])
+
+            job.total_files = total_files
+            job.total_chunks = total_chunks
+            job.files_indexed = all_indexed_files
             job.status = IngestionStatus.COMPLETED
             job.completed_at = datetime.now(timezone.utc)
             return job
@@ -615,6 +763,131 @@ class DirectRAGClient(RAGClientProtocol):
             job.error_message = str(e)
             job.completed_at = datetime.now(timezone.utc)
             return job
+
+    async def reindex_service(
+        self,
+        service: str = "income-assessment-service",
+    ) -> IngestionJob:
+        """
+        Delete all existing points for this service in Qdrant and re-ingest all files fresh.
+        """
+        if self._pipeline is None or self._ingestion is None:
+            self._init_rag()
+
+        # Delete existing points in vector store
+        try:
+            if hasattr(self._pipeline.vector_store, "delete_by_service"):
+                await self._pipeline.vector_store.delete_by_service(service)
+        except Exception as e:
+            pass
+
+        return await self.trigger_ingestion(service=service)
+
+    async def create_course(
+        self,
+        course_data: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """
+        Author, write, publish, and index a new Knowledge Cafe course.
+        """
+        import re
+
+        title = course_data.get("title", "").strip()
+        if not title:
+            raise ValueError("Course title cannot be empty.")
+
+        course_id = course_data.get("id") or re.sub(r"[^a-zA-Z0-9]+", "-", title.lower()).strip("-")
+        target_service = course_data.get("target_service") or "income-assessment-service"
+        description = course_data.get("description", "")
+        difficulty = course_data.get("difficulty", "Intermediate")
+        duration = course_data.get("estimated_duration", "45 mins")
+        lessons = course_data.get("lessons", [])
+        if not lessons:
+            raise ValueError("Course must contain at least one lesson.")
+
+        course_dir = _project_root / "rag_service" / "knowledge_cafe" / "courses" / course_id
+        course_dir.mkdir(parents=True, exist_ok=True)
+        lessons_dir = course_dir / "lessons"
+        lessons_dir.mkdir(parents=True, exist_ok=True)
+
+        # Generate course-structure.md
+        lines = [
+            "---",
+            f"id: {course_id}",
+            f"title: {title}",
+            f"description: {description}",
+            f"target_service: {target_service}",
+            f"difficulty: {difficulty}",
+            f"estimated_duration: {duration}",
+            "domain: Engineering & Microservices",
+            "group: technical",
+            "tags:",
+            f"  - {target_service}",
+            "  - team-tutorial",
+            "---\n",
+            f"# {title}\n",
+            f"{description}\n",
+        ]
+
+        for idx, l in enumerate(lessons):
+            l_title = l.get("title", f"Lesson {idx + 1}")
+            l_slug = re.sub(r"[^a-zA-Z0-9]+", "-", l_title.lower()).strip("-")
+            l_id = f"{idx + 1:02d}-{l_slug}"
+            l_summary = l.get("summary", "")
+            l_content = l.get("content", "")
+            quiz = l.get("quiz_questions") or []
+
+            # Write lesson file
+            cur_lesson_dir = lessons_dir / l_id
+            cur_lesson_dir.mkdir(parents=True, exist_ok=True)
+            overview_file = cur_lesson_dir / "overview.md"
+            overview_file.write_text(l_content or f"# {l_title}\n\n{l_summary}", encoding="utf-8")
+
+            lines.append(f"## {idx + 1}. {l_title}\n")
+            lines.append(f"- **Summary**: {l_summary}")
+            lines.append(f"- **Context**:\n  - `lessons/{l_id}/overview.md`\n")
+
+            if quiz:
+                lines.append("- **Knowledge Check**:\n")
+                for q in quiz:
+                    q_text = q.get("question", "")
+                    opts = q.get("options", [])
+                    c_idx = q.get("correct_option_index", 0)
+                    exp = q.get("explanation", "")
+                    lines.append(f"  - **Question**: {q_text}")
+                    lines.append("  - **Type**: multiple_choice")
+                    lines.append("  - **Options**:")
+                    for o_idx, opt in enumerate(opts):
+                        mark = "[x]" if o_idx == c_idx else "[ ]"
+                        lines.append(f"    - {mark} {opt}")
+                    if exp:
+                        lines.append(f"  - **Explanation**: {exp}\n")
+                    else:
+                        lines.append("")
+            lines.append("")
+
+        (course_dir / "course-structure.md").write_text("\n".join(lines), encoding="utf-8")
+
+        # Force indexing into Qdrant knowledge_cafe_collection
+        if self._course_indexer is None:
+            self._init_rag()
+
+        indexed_chunks = 0
+        if self._course_indexer:
+            indexed_chunks = await self._course_indexer.index_course(course_id, force=True)
+
+        return {
+            "id": course_id,
+            "title": title,
+            "description": description,
+            "target_service": target_service,
+            "difficulty": difficulty,
+            "estimated_duration": duration,
+            "total_lessons": len(lessons),
+            "indexed_chunks": indexed_chunks,
+            "message": f"Course '{title}' successfully authored and indexed ({indexed_chunks} chunks).",
+        }
+
 
     async def upload_course_zip(
         self,
@@ -635,6 +908,16 @@ class DirectRAGClient(RAGClientProtocol):
 
         try:
             with zipfile.ZipFile(io.BytesIO(content_bytes)) as zf:
+                MAX_ZIP_ENTRIES = 500
+                MAX_ZIP_EXTRACTED_BYTES = 50 * 1024 * 1024  # 50 MB
+                if len(zf.infolist()) > MAX_ZIP_ENTRIES:
+                    raise ValueError(f"Archive contains too many entries (limit: {MAX_ZIP_ENTRIES}).")
+                total_uncompressed = sum(m.file_size for m in zf.infolist())
+                if total_uncompressed > MAX_ZIP_EXTRACTED_BYTES:
+                    raise ValueError(
+                        f"Archive uncompressed size exceeds limit of {MAX_ZIP_EXTRACTED_BYTES // (1024 * 1024)}MB."
+                    )
+
                 # Security: prevent zip-slip attacks
                 for member in zf.infolist():
                     target_path = Path(member.filename)
@@ -661,9 +944,19 @@ class DirectRAGClient(RAGClientProtocol):
                     if not course or not course.id:
                         raise ValueError("Failed to parse valid course definition from course-structure.md")
 
-                    pending_root = _project_root / "rag_service" / "knowledge_cafe" / "pending"
+                    import re
+                    course_id_pattern = re.compile(r"^[a-zA-Z0-9_\-]+$")
+                    if not course_id_pattern.match(course.id):
+                        raise ValueError(
+                            f"Invalid course ID '{course.id}'. Must contain only alphanumeric characters, dashes, and underscores."
+                        )
+
+                    pending_root = (_project_root / "rag_service" / "knowledge_cafe" / "pending").resolve()
                     pending_root.mkdir(parents=True, exist_ok=True)
-                    dest_dir = pending_root / course.id
+                    dest_dir = (pending_root / course.id).resolve()
+                    if not dest_dir.is_relative_to(pending_root):
+                        raise ValueError(f"Path traversal detected in course ID '{course.id}'.")
+
                     if dest_dir.exists():
                         shutil.rmtree(dest_dir)
                     shutil.copytree(course_dir, dest_dir)
@@ -683,7 +976,7 @@ class DirectRAGClient(RAGClientProtocol):
         from datetime import datetime, timezone
         from rag_service.knowledge_cafe.course_loader import get_course_loader
 
-        pending_root = _project_root / "rag_service" / "knowledge_cafe" / "pending"
+        pending_root = (_project_root / "rag_service" / "knowledge_cafe" / "pending").resolve()
         if not pending_root.is_dir():
             return []
 
@@ -711,14 +1004,25 @@ class DirectRAGClient(RAGClientProtocol):
         return courses
 
     async def trigger_course_ingestion(self, course_id: str) -> dict:
+        import re
         import shutil
+
+        course_id_pattern = re.compile(r"^[a-zA-Z0-9_\-]+$")
+        if not course_id or not course_id_pattern.match(course_id):
+            raise ValueError(f"Invalid course ID '{course_id}'. Must contain only alphanumeric characters, dashes, and underscores.")
+
         if self._course_indexer is None:
             self._init_rag()
         if self._course_indexer is None:
             raise RAGServiceException("Knowledge Cafe Course Indexer could not be initialized.")
 
-        pending_dir = _project_root / "rag_service" / "knowledge_cafe" / "pending" / course_id
-        courses_dir = _project_root / "rag_service" / "knowledge_cafe" / "courses" / course_id
+        pending_root = (_project_root / "rag_service" / "knowledge_cafe" / "pending").resolve()
+        courses_root = (_project_root / "rag_service" / "knowledge_cafe" / "courses").resolve()
+        pending_dir = (pending_root / course_id).resolve()
+        courses_dir = (courses_root / course_id).resolve()
+
+        if not pending_dir.is_relative_to(pending_root) or not courses_dir.is_relative_to(courses_root):
+            raise ValueError("Invalid path traversal detected.")
 
         if pending_dir.is_dir():
             if courses_dir.exists():

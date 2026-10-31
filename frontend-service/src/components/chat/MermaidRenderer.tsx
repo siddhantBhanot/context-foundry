@@ -13,7 +13,7 @@ function initMermaid() {
   try {
     mermaid.initialize({
       startOnLoad: false,
-      securityLevel: 'loose',
+      securityLevel: 'strict',
       suppressErrorRendering: true,
       theme: 'neutral',
       themeVariables: {

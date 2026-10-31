@@ -69,6 +69,20 @@ async def trigger_knowledge_ingestion(
     return KnowledgeIngestResponse(**result)
 
 
+@router.post("/reindex", response_model=KnowledgeIngestResponse)
+async def trigger_knowledge_reindex(
+    payload: KnowledgeIngestRequest,
+    current_user: User = Depends(get_current_user),
+    knowledge_service: KnowledgeService = Depends(get_knowledge_service),
+) -> KnowledgeIngestResponse:
+    """
+    Purge existing vectors for this microservice from Qdrant and re-index all staged files from scratch.
+    """
+    result = await knowledge_service.reindex(service=payload.service)
+    return KnowledgeIngestResponse(**result)
+
+
+
 @router.post("/course/upload", response_model=CourseUploadResponse)
 async def upload_course_archive(
     file: UploadFile = File(...),

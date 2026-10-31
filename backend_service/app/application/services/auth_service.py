@@ -77,17 +77,9 @@ class AuthService:
 
         user = await self.user_repo.get_by_email(clean_email)
         
-        # Auto-provision demo accounts if they don't exist yet
-        if not user:
-            if clean_email in {"advisor@contextfoundry.dev", "neha.kapoor@demo.io"}:
-                user = await self.user_repo.create_user(User(
-                    id=str(uuid.uuid4()),
-                    email=clean_email,
-                    name="Neha Kapoor (RM / Wealth)",
-                    role="banking_staff",
-                    password_hash=hash_password("password123"),
-                ))
-            elif clean_email in {"engineer@contextfoundry.dev", "dev@contextfoundry.dev"}:
+        # Auto-provision demo accounts if they don't exist yet (non-production environments only)
+        if not user and self.settings.environment.lower() != "production":
+            if clean_email in {"engineer@contextfoundry.dev", "dev@contextfoundry.dev"}:
                 user = await self.user_repo.create_user(User(
                     id=str(uuid.uuid4()),
                     email=clean_email,

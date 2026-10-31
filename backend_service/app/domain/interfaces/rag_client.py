@@ -51,6 +51,21 @@ class RAGClientProtocol(Protocol):
         """Trigger document chunking, embedding, and vector upsertion for a service."""
         ...
 
+    async def reindex_service(
+        self,
+        service: str = "income-assessment-service",
+    ) -> IngestionJob:
+        """Purge existing vectors for a microservice and re-index all staged files from scratch."""
+        ...
+
+    async def create_course(
+        self,
+        course_data: Dict[str, Any],
+    ) -> Dict[str, Any]:
+        """Author, write, publish, and index a new Knowledge Cafe course."""
+        ...
+
+
     async def get_document(
         self,
         service: str,

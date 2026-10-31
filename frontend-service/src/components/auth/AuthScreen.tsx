@@ -5,7 +5,6 @@ import {
   Code2,
   Eye,
   EyeOff,
-  Landmark,
   Lock,
   Mail,
   ShieldCheck,
@@ -22,7 +21,7 @@ export function AuthScreen() {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [role, setRole] = useState<'developer' | 'banking_staff'>('developer');
+  const role = 'developer';
   const [showPassword, setShowPassword] = useState(false);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -76,7 +75,7 @@ export function AuthScreen() {
       {/* Top Brand Bar */}
       <div className="w-full max-w-5xl mx-auto flex items-center justify-between pt-2 sm:pt-4">
         <div className="flex items-center gap-2.5 text-left">
-          <ContextFoundryLogo isBankingStaff={role === "banking_staff"} />
+          <ContextFoundryLogo />
           <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase hidden sm:inline-block border-l border-slate-200 pl-2.5 self-center py-0.5">
             INTELLIGENCE PLATFORM
           </span>
@@ -97,52 +96,38 @@ export function AuthScreen() {
               <Sparkles className="w-6 h-6 text-[#f05a28]" />
             </div>
             <h2 className="text-2xl font-black tracking-tight text-slate-900">
-              {mode === 'login' ? 'Sign In to FC Central' : 'Create Your Account'}
+              {mode === 'login' ? 'Sign In to ContextFoundry' : 'Create Your Account'}
             </h2>
             <p className="text-xs text-slate-500 mt-1">
               {mode === 'login'
-                ? 'Select your persona to sign in with your role-specific workspace'
-                : 'Choose your department for a tailored intelligence experience'}
+                ? 'Sign in to access Dev Central engineering intelligence and courses'
+                : 'Join ContextFoundry to explore microservices and technical courses'}
             </p>
           </div>
 
-          {/* Quick Demo Login Cards (Option B evaluation shortcuts) */}
+          {/* Quick Demo Login */}
           {mode === 'login' && (
             <div className="mb-6 space-y-2">
               <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block text-center">
-                One-Click Role Sign In
+                One-Click Demo Sign In
               </span>
-              <div className="grid grid-cols-2 gap-2">
-                <button
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={() => handleQuickLogin('engineer@contextfoundry.dev', 'developer')}
-                  className="p-3 rounded-2xl border border-slate-200 hover:border-[#f05a28] bg-slate-50/70 hover:bg-orange-50/40 text-left transition-all cursor-pointer group disabled:opacity-50"
-                >
+              <button
+                type="button"
+                disabled={isSubmitting}
+                onClick={() => handleQuickLogin('engineer@contextfoundry.dev', 'developer')}
+                className="w-full p-3.5 rounded-2xl border border-slate-200 hover:border-[#f05a28] bg-slate-50/70 hover:bg-orange-50/40 text-left transition-all cursor-pointer group disabled:opacity-50 flex items-center justify-between"
+              >
+                <div>
                   <div className="flex items-center gap-1.5 mb-1 text-slate-900 font-bold text-xs group-hover:text-[#f05a28]">
-                    <Code2 className="w-3.5 h-3.5 text-[#f05a28]" />
-                    <span>Engineer</span>
+                    <Code2 className="w-4 h-4 text-[#f05a28]" />
+                    <span>Software Engineer Demo</span>
                   </div>
-                  <p className="text-[10px] text-slate-500 leading-tight">
-                    Dev Chat + KT Sessions
+                  <p className="text-[11px] text-slate-500 leading-tight">
+                    Instant access to Dev Chat, Ingestion & Knowledge Cafe
                   </p>
-                </button>
-
-                <button
-                  type="button"
-                  disabled={isSubmitting}
-                  onClick={() => handleQuickLogin('advisor@contextfoundry.dev', 'banking_staff')}
-                  className="p-3 rounded-2xl border border-slate-200 hover:border-[#97144d] bg-slate-50/70 hover:bg-rose-50/40 text-left transition-all cursor-pointer group disabled:opacity-50"
-                >
-                  <div className="flex items-center gap-1.5 mb-1 text-slate-900 font-bold text-xs group-hover:text-[#97144d]">
-                    <Landmark className="w-3.5 h-3.5 text-[#97144d]" />
-                    <span>Banking Staff</span>
-                  </div>
-                  <p className="text-[10px] text-slate-500 leading-tight">
-                    Saathi + KT Sessions
-                  </p>
-                </button>
-              </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-[#f05a28] transition-colors" />
+              </button>
 
               <div className="relative flex py-2 items-center">
                 <div className="grow border-t border-slate-200"></div>
@@ -199,50 +184,6 @@ export function AuthScreen() {
           <form onSubmit={handleSubmit} className="space-y-4">
             {mode === 'signup' && (
               <>
-                {/* Role / Team Selector */}
-                <div>
-                  <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
-                    Select Your Department / Role
-                  </label>
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setRole('developer')}
-                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
-                        role === 'developer'
-                          ? 'border-[#f05a28] bg-orange-50/60 ring-2 ring-[#f05a28]/10'
-                          : 'border-slate-200 bg-slate-50 hover:bg-white'
-                      }`}
-                    >
-                      <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900 mb-0.5">
-                        <Code2 className="w-3.5 h-3.5 text-[#f05a28]" />
-                        <span>Technical Team</span>
-                      </div>
-                      <p className="text-[10px] text-slate-500">
-                        Dev Chat + KT Sessions
-                      </p>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => setRole('banking_staff')}
-                      className={`p-3 rounded-2xl border text-left transition-all cursor-pointer ${
-                        role === 'banking_staff'
-                          ? 'border-[#97144d] bg-rose-50/60 ring-2 ring-[#97144d]/10'
-                          : 'border-slate-200 bg-slate-50 hover:bg-white'
-                      }`}
-                    >
-                      <div className="flex items-center gap-1.5 font-bold text-xs text-slate-900 mb-0.5">
-                        <Landmark className="w-3.5 h-3.5 text-[#97144d]" />
-                        <span>Banking Staff</span>
-                      </div>
-                      <p className="text-[10px] text-slate-500">
-                        Saathi + KT Sessions
-                      </p>
-                    </button>
-                  </div>
-                </div>
-
                 <div>
                   <label className="block text-[11px] font-bold text-slate-700 uppercase tracking-wider mb-1.5">
                     Full Name
@@ -279,7 +220,7 @@ export function AuthScreen() {
                     setEmail(e.target.value);
                     if (errorMessage) setErrorMessage(null);
                   }}
-                  placeholder={mode === 'signup' && role === 'banking_staff' ? 'advisor@contextfoundry.dev' : 'engineer@contextfoundry.dev'}
+                  placeholder="engineer@contextfoundry.dev"
                   className={`w-full bg-slate-50 border rounded-xl pl-10 pr-4 py-2.5 text-sm text-slate-800 placeholder:text-slate-400 focus:bg-white focus:outline-hidden focus:ring-2 transition-all ${
                     errorMessage
                       ? 'border-rose-300 focus:border-rose-500 focus:ring-rose-500/20'
