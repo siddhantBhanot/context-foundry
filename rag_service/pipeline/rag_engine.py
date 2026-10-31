@@ -11,6 +11,7 @@ from rag_service.domain.models import (
 )
 from rag_service.domain.protocols import EmbeddingProvider, LLMProvider, VectorStore
 from rag_service.ingestion.repo_map import RepoMapBuilder
+from rag_service.ingestion.symbol_graph import EdgeType, NodeType, SymbolGraphIndex
 from rag_service.prompts.loader import PromptLoader, get_prompt_loader
 
 logger = logging.getLogger("rag_service.pipeline")
@@ -54,6 +55,28 @@ class ContextAssembler:
             bp_block = f"[Repository Architecture Blueprint]\n{repo_map_md}\n"
             context_blocks.append(bp_block)
             used_chars += len(bp_block)
+
+        if service:
+            # Extract seed methods from retrieved chunks to build grounded Call Hierarchy Trace
+            seed_methods: List[str] = []
+            for c in chunks:
+                if c.metadata.method_name and c.metadata.method_name not in seed_methods:
+                    seed_methods.append(c.metadata.method_name)
+                for m in (c.metadata.extra or {}).get("methods_in_file", []):
+                    if m and m not in seed_methods:
+                        seed_methods.append(m)
+
+            if seed_methods:
+                try:
+                    graph_idx = SymbolGraphIndex.load(service)
+                    if graph_idx:
+                        trace_lines = graph_idx.build_call_hierarchy_trace(seed_methods[:4])
+                        if trace_lines:
+                            trace_block = "[Architecture Call Hierarchy Trace]\n" + "\n".join(trace_lines) + "\n"
+                            context_blocks.append(trace_block)
+                            used_chars += len(trace_block)
+                except Exception as e:
+                    logger.debug("Failed to build call hierarchy trace: %s", e)
 
         sources: List[SourceReference] = []
         seen_files = set()
@@ -284,6 +307,54 @@ class RAGPipeline:
                         existing_ids.add(ec.id)
             except Exception as e:
                 logger.debug("1-hop dependency expansion skipped: %s", e)
+
+        # 3. Method-Level Multi-Hop Graph Traversal (Callees, Callers, Implementations)
+        try:
+            if hasattr(self.vector_store, "fetch_by_methods"):
+                graph_idx = SymbolGraphIndex.load(target_service)
+                if graph_idx:
+                    seed_methods: List[str] = []
+                    for c in retrieved_chunks:
+                        if c.metadata.method_name and c.metadata.method_name not in seed_methods:
+                            seed_methods.append(c.metadata.method_name)
+                        for m in (c.metadata.extra or {}).get("methods_in_file", []):
+                            if m and m not in seed_methods:
+                                seed_methods.append(m)
+
+                    target_methods: List[str] = []
+                    for sm in seed_methods[:4]:
+                        # Outgoing calls (callees up to 2 hops)
+                        for node, depth, edge_type in graph_idx.traverse(
+                            sm,
+                            direction="outgoing",
+                            max_depth=2,
+                            edge_types={EdgeType.CALLS, EdgeType.IMPLEMENTS},
+                        ):
+                            if node.node_type == NodeType.METHOD and node.name not in target_methods:
+                                target_methods.append(node.name)
+
+                        # Incoming callers / endpoints (1 hop)
+                        for node, depth, edge_type in graph_idx.traverse(
+                            sm,
+                            direction="incoming",
+                            max_depth=1,
+                            edge_types={EdgeType.CALLED_BY, EdgeType.INVOKES},
+                        ):
+                            if node.node_type == NodeType.METHOD and node.name not in target_methods:
+                                target_methods.append(node.name)
+
+                    if target_methods:
+                        method_chunks = await self.vector_store.fetch_by_methods(
+                            service=target_service,
+                            methods=target_methods[:8],
+                            limit=3,
+                        )
+                        for mc in method_chunks:
+                            if mc.id not in existing_ids:
+                                retrieved_chunks.append(mc)
+                                existing_ids.add(mc.id)
+        except Exception as e:
+            logger.debug("Method-level graph expansion skipped: %s", e)
 
         return retrieved_chunks
 

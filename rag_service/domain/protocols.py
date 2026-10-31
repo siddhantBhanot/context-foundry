@@ -89,3 +89,21 @@ class VectorStore(Protocol):
     async def delete(self, chunk_ids: List[str]) -> bool:
         """Delete specific chunks by identifier."""
         ...
+
+    async def fetch_by_symbols(
+        self,
+        service: str,
+        symbols: List[str],
+        limit: int = 3,
+    ) -> List[Chunk]:
+        """Retrieve chunks defining specific collaborator classes/symbols for graph expansion."""
+        ...
+
+    async def fetch_by_methods(
+        self,
+        service: str,
+        methods: List[str],
+        limit: int = 4,
+    ) -> List[Chunk]:
+        """Retrieve exact chunks defining specific method implementations."""
+        ...

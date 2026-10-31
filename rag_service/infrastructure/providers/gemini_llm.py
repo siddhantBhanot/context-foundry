@@ -1,3 +1,4 @@
+import asyncio
 import logging
 from typing import Any, AsyncIterator, List, Optional
 
@@ -29,7 +30,7 @@ class GeminiLLMProvider:
 
     def _candidate_models(self, primary_model: str) -> List[str]:
         candidates = [primary_model]
-        for fallback in ("gemini-3.5-flash", "gemini-3.5-flash-lite", "gemini-3.6-flash", "gemma-4-26b-a4b-it"):
+        for fallback in ("gemini-3.6-flash", "gemini-3.5-flash-lite", "gemini-3.5-flash", "gemma-4-26b-a4b-it"):
             if fallback not in candidates:
                 candidates.append(fallback)
         return candidates
@@ -107,10 +108,13 @@ class GeminiLLMProvider:
         primary_err: Optional[Exception] = None
         for cand_model in self._candidate_models(target_model):
             try:
-                response = await client.aio.models.generate_content(
-                    model=cand_model,
-                    contents=contents,
-                    config=config,
+                response = await asyncio.wait_for(
+                    client.aio.models.generate_content(
+                        model=cand_model,
+                        contents=contents,
+                        config=config,
+                    ),
+                    timeout=self.settings.gemini_first_token_timeout_seconds * 2,
                 )
 
                 text = response.text or ""
@@ -158,25 +162,47 @@ class GeminiLLMProvider:
             max_tokens=max_tokens,
         )
 
+        timeout_s = self.settings.gemini_first_token_timeout_seconds
         primary_err: Optional[Exception] = None
         for cand_model in self._candidate_models(target_model):
+            yielded_any = False
             try:
-                stream_res = await client.aio.models.generate_content_stream(
-                    model=cand_model,
-                    contents=contents,
-                    config=config,
+                stream_res = await asyncio.wait_for(
+                    client.aio.models.generate_content_stream(
+                        model=cand_model,
+                        contents=contents,
+                        config=config,
+                    ),
+                    timeout=timeout_s,
                 )
-                yielded_any = False
-                async for chunk in stream_res:
+                stream_iter = stream_res.__aiter__()
+                while True:
+                    # Only the first chunk is bounded by the fail-over timeout;
+                    # later chunks use the SDK/network defaults.
+                    try:
+                        if yielded_any:
+                            chunk = await stream_iter.__anext__()
+                        else:
+                            chunk = await asyncio.wait_for(stream_iter.__anext__(), timeout=timeout_s)
+                    except StopAsyncIteration:
+                        break
                     if chunk.text:
                         yielded_any = True
                         yield chunk.text
                 if yielded_any:
                     return
             except Exception as e:
+                if yielded_any:
+                    # Partial output already sent to the client: do not restart on another model
+                    # (would duplicate/garble the answer).
+                    logger.error("Gemini model '%s' failed mid-stream: %s", cand_model, e)
+                    raise RuntimeError(f"Gemini streaming interrupted ({cand_model}): {e}") from e
                 if primary_err is None:
                     primary_err = e
-                logger.warning("Gemini model '%s' failed during stream (%s), trying next fallback...", cand_model, e)
+                logger.warning(
+                    "Gemini model '%s' failed during stream (%s: %s), trying next fallback...",
+                    cand_model, type(e).__name__, e,
+                )
 
         raise RuntimeError(f"Gemini streaming error ({target_model}): {primary_err}") from primary_err
 
