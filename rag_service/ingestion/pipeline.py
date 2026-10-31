@@ -8,6 +8,7 @@ from rag_service.ingestion.chunkers.kotlin_chunker import KotlinChunker
 from rag_service.ingestion.chunkers.markdown_chunker import MarkdownChunker
 from rag_service.ingestion.chunkers.python_chunker import PythonChunker
 from rag_service.ingestion.repo_map import RepoMapBuilder
+from rag_service.ingestion.symbol_graph import SymbolGraphBuilder
 
 
 class IngestionPipeline:
@@ -167,6 +168,14 @@ class IngestionPipeline:
                 service=target_service,
                 chunks=all_chunks,
             )
+            try:
+                SymbolGraphBuilder.build_and_save(
+                    directory_path=dir_path,
+                    service=target_service,
+                )
+            except Exception as e:
+                # Keep ingestion robust if symbol graph generation encounters issues
+                pass
 
         return {
             "service": target_service,

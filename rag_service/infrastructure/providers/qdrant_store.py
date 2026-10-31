@@ -454,6 +454,90 @@ class QdrantVectorStoreAdapter:
             logger.debug("1-hop symbol expansion skipped: %s", e)
             return []
 
+    async def fetch_by_methods(
+        self,
+        service: str,
+        methods: List[str],
+        limit: int = 4,
+    ) -> List[Chunk]:
+        """
+        Retrieve chunks defining specific target methods for multi-hop call-chain traversal.
+        """
+        if not methods or limit <= 0:
+            return []
+
+        raw_methods: List[str] = []
+        for m in methods:
+            short = m.split(".")[-1].split("#")[-1]
+            if short and short not in raw_methods:
+                raw_methods.append(short)
+            if m not in raw_methods:
+                raw_methods.append(m)
+
+        if self._client is None:
+            found: List[Chunk] = []
+            seen_ids = set()
+            for c in self._memory_chunks.values():
+                if c.metadata.service == service:
+                    m_name = c.metadata.method_name or ""
+                    full_m = f"{c.metadata.class_name}.{m_name}" if c.metadata.class_name else m_name
+                    if m_name in raw_methods or full_m in methods:
+                        if c.id not in seen_ids:
+                            seen_ids.add(c.id)
+                            found.append(c)
+                            if len(found) >= limit:
+                                break
+            return found
+
+        try:
+            from qdrant_client.http.models import FieldCondition, Filter, MatchAny, MatchValue
+
+            q_filter = Filter(
+                must=[
+                    FieldCondition(key="service", match=MatchValue(value=service)),
+                    FieldCondition(key="method_name", match=MatchAny(any=raw_methods[:20])),
+                ]
+            )
+
+            def _do_scroll():
+                try:
+                    records, _ = self._client.scroll(
+                        collection_name=self.collection_name,
+                        scroll_filter=q_filter,
+                        limit=max(limit * 6, 20),
+                        with_payload=True,
+                        with_vectors=False,
+                    )
+                    return records
+                except Exception:
+                    return []
+
+            loop = asyncio.get_running_loop()
+            records = await loop.run_in_executor(None, _do_scroll)
+
+            chunks_from_records = [self._hit_to_chunk(rec, service) for rec in records]
+            method_priority = {m: idx for idx, m in enumerate(raw_methods)}
+            chunks_from_records.sort(
+                key=lambda c: (
+                    method_priority.get(c.metadata.method_name or "", 999),
+                    c.metadata.start_line or 0,
+                )
+            )
+
+            expanded: List[Chunk] = []
+            seen_methods = set()
+            for chunk in chunks_from_records:
+                m_key = f"{chunk.metadata.class_name}#{chunk.metadata.method_name}"
+                if m_key not in seen_methods:
+                    seen_methods.add(m_key)
+                    expanded.append(chunk)
+                    if len(expanded) >= limit:
+                        break
+            return expanded
+        except Exception as e:
+            logger.debug("Method-level graph expansion skipped: %s", e)
+            return []
+
     def _memory_search(
         self,
         query_vector: List[float],

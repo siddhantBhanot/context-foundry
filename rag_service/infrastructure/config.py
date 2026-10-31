@@ -167,6 +167,9 @@ class Settings(BaseSettings):
     gemini_model_id: str = Field(
         default_factory=lambda: os.getenv("GEMINI_MODEL_ID", "gemini-3.7-flash")
     )
+    gemini_first_token_timeout_seconds: float = Field(
+        default_factory=lambda: float(os.getenv("GEMINI_FIRST_TOKEN_TIMEOUT_SECONDS", "25"))
+    )
     gemini_models: str = Field(
         default_factory=lambda: os.getenv(
             "GEMINI_MODELS",
