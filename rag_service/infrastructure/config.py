@@ -167,6 +167,9 @@ class Settings(BaseSettings):
     gemini_model_id: str = Field(
         default_factory=lambda: os.getenv("GEMINI_MODEL_ID", "gemini-3.7-flash")
     )
+    gemini_embedding_model_id: str = Field(
+        default_factory=lambda: os.getenv("GEMINI_EMBEDDING_MODEL_ID", "gemini-embedding-001")
+    )
     gemini_first_token_timeout_seconds: float = Field(
         default_factory=lambda: float(os.getenv("GEMINI_FIRST_TOKEN_TIMEOUT_SECONDS", "25"))
     )
@@ -224,6 +227,12 @@ class Settings(BaseSettings):
         default_factory=lambda: os.getenv(
             "QDRANT_EMBEDDING_MODEL", "jinaai/jina-embeddings-v2-base-code"
         )
+    )
+    # Toggle for heavy local ONNX Jina-Code-v2 embeddings (~900MB RAM).
+    # Defaults to False so cloud deployments use lightweight Gemini API embeddings.
+    use_local_jina_embeddings: bool = Field(
+        default_factory=lambda: os.getenv("USE_LOCAL_JINA_EMBEDDINGS", "false").strip().lower()
+        in {"1", "true", "yes", "on"}
     )
 
     # Domain Defaults

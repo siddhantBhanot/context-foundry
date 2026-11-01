@@ -20,6 +20,23 @@ class GeminiLLMProvider:
         self.settings = settings or get_settings()
         self.model_id = self.settings.gemini_model_id
         self.api_key = self.settings.gemini_api_key or ""
+        self._client: Optional[Any] = None
+        self._client_api_key: Optional[str] = None
+
+    def _get_client(self) -> Any:
+        current_key = (self.settings.gemini_api_key or self.api_key or "").strip()
+        if self._client is None or self._client_api_key != current_key:
+            from google import genai
+            from google.genai import types
+
+            self._client = genai.Client(
+                api_key=current_key,
+                http_options=types.HttpOptions(
+                    retry_options=types.HttpRetryOptions(attempts=1)
+                ),
+            )
+            self._client_api_key = current_key
+        return self._client
 
     def _normalize_model_id(self, model: Optional[str]) -> str:
         target = (model or self.model_id or "gemini-3.7-flash").strip()
@@ -89,15 +106,7 @@ class GeminiLLMProvider:
     ) -> LLMResponse:
         """Generate response using Google GenAI async client (`client.aio.models.generate_content`)."""
         target_model = self._normalize_model_id(model or kwargs.pop("model", None))
-        from google import genai
-        from google.genai import types
-
-        client = genai.Client(
-            api_key=self.api_key,
-            http_options=types.HttpOptions(
-                retry_options=types.HttpRetryOptions(attempts=1)
-            ),
-        )
+        client = self._get_client()
         contents, config = self._build_contents_and_config(
             messages=messages,
             system_prompt=system_prompt,
@@ -146,15 +155,7 @@ class GeminiLLMProvider:
     ) -> AsyncIterator[str]:
         """Stream chunks asynchronously using `client.aio.models.generate_content_stream`."""
         target_model = self._normalize_model_id(model or kwargs.pop("model", None))
-        from google import genai
-        from google.genai import types
-
-        client = genai.Client(
-            api_key=self.api_key,
-            http_options=types.HttpOptions(
-                retry_options=types.HttpRetryOptions(attempts=1)
-            ),
-        )
+        client = self._get_client()
         contents, config = self._build_contents_and_config(
             messages=messages,
             system_prompt=system_prompt,

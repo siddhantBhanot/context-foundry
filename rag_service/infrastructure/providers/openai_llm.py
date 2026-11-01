@@ -17,6 +17,14 @@ class OpenAiClientProvider:
         self.model_id = self.settings.openai_model_id
         self.base_url = self.settings.openai_base_url
         self.api_key = self.settings.openai_api_key or "no-key-provided"
+        self._client: Optional[Any] = None
+
+    def _get_client(self) -> Any:
+        if self._client is None:
+            from openai import AsyncOpenAI
+
+            self._client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
+        return self._client
 
     async def generate(
         self,
@@ -32,9 +40,7 @@ class OpenAiClientProvider:
         """
         target_model = model or kwargs.pop("model", None) or self.model_id
         try:
-            from openai import AsyncOpenAI
-
-            client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
+            client = self._get_client()
 
             formatted_messages = []
             if system_prompt:
@@ -75,9 +81,7 @@ class OpenAiClientProvider:
         """Stream chunks using AsyncOpenAI completions."""
         target_model = model or kwargs.pop("model", None) or self.model_id
         try:
-            from openai import AsyncOpenAI
-
-            client = AsyncOpenAI(api_key=self.api_key, base_url=self.base_url)
+            client = self._get_client()
 
             formatted_messages = []
             if system_prompt:

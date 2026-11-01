@@ -35,6 +35,7 @@ class DirectRAGClient(RAGClientProtocol):
         self._kt_engine = None
         self._course_indexer = None
         self._indexed_courses: set = set()
+        self._background_tasks: set = set()
         self._initialized_env_mtime: float = 0.0
         self._init_rag()
 
@@ -43,6 +44,7 @@ class DirectRAGClient(RAGClientProtocol):
             from rag_service.infrastructure.config import _current_env_mtime, get_settings as get_rag_settings
             from rag_service.infrastructure.providers.bedrock_embedding import BedrockEmbeddingProvider
             from rag_service.infrastructure.providers.bedrock_llm import BedrockLLMProvider
+            from rag_service.infrastructure.providers.gemini_embedding import GeminiEmbeddingProvider
             from rag_service.infrastructure.providers.gemini_llm import GeminiLLMProvider
             from rag_service.infrastructure.providers.openai_llm import OpenAiClientProvider
             from rag_service.infrastructure.providers.qdrant_embedding import QdrantEmbeddingProvider
@@ -68,9 +70,14 @@ class DirectRAGClient(RAGClientProtocol):
             has_groq = bool(settings.groq_api_key)
             has_gemini = settings.has_valid_gemini_key()
 
-            # Embedder: Use Bedrock if explicitly configured and AWS credentials exist; otherwise use Qdrant FastEmbed
+            # Embedder:
+            # 1. Bedrock if explicitly configured and AWS credentials exist
+            # 2. Gemini API embeddings (768-dim) when USE_LOCAL_JINA_EMBEDDINGS is False (default) and Gemini key exists
+            # 3. Qdrant FastEmbed (jinaai/jina-embeddings-v2-base-code) when USE_LOCAL_JINA_EMBEDDINGS is True or offline
             if settings.embedding_provider == "bedrock" and has_aws:
                 embedding_provider = BedrockEmbeddingProvider(settings)
+            elif not getattr(settings, "use_local_jina_embeddings", False) and has_gemini:
+                embedding_provider = GeminiEmbeddingProvider(settings, dimension=768)
             else:
                 embedding_provider = QdrantEmbeddingProvider(settings)
 
@@ -1050,14 +1057,18 @@ class DirectRAGClient(RAGClientProtocol):
             if course_id:
                 if course_id not in self._indexed_courses:
                     self._indexed_courses.add(course_id)
-                    asyncio.create_task(self._course_indexer.index_course(course_id))
+                    task = asyncio.create_task(self._course_indexer.index_course(course_id))
+                    self._background_tasks.add(task)
+                    task.add_done_callback(self._background_tasks.discard)
             else:
                 from rag_service.knowledge_cafe.course_loader import get_course_loader
                 loader = get_course_loader()
                 for c in loader.list_courses():
                     if c.id not in self._indexed_courses:
                         self._indexed_courses.add(c.id)
-                        asyncio.create_task(self._course_indexer.index_course(c.id))
+                        task = asyncio.create_task(self._course_indexer.index_course(c.id))
+                        self._background_tasks.add(task)
+                        task.add_done_callback(self._background_tasks.discard)
         except Exception as e:
             logger.warning(f"Failed to trigger async KT course indexing: {e}")
 

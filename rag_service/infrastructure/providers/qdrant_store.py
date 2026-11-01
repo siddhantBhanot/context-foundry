@@ -11,6 +11,9 @@ from rag_service.infrastructure.config import Settings, get_settings
 logger = logging.getLogger(__name__)
 
 _SPARSE_MODEL_INSTANCE = None
+_SHARED_QDRANT_CLIENTS: Dict[tuple, Any] = {}
+_VERIFIED_COLLECTIONS: set = set()
+MAX_MEMORY_FALLBACK_CHUNKS: int = 2000
 
 
 def _get_sparse_bm25_model():
@@ -48,12 +51,16 @@ class QdrantVectorStoreAdapter:
         self._memory_chunks: Dict[str, Chunk] = {}  # Local fallback when offline
         self._init_client()
 
-    def _ensure_collection(self) -> None:
+    def _ensure_collection(self, force: bool = False) -> None:
         """
         Ensure the target Qdrant collection, sparse BM25 vector config,
         and required keyword payload indexes exist.
         """
         if self._client is None:
+            return
+
+        cache_key = (self.url, self.collection_name, self.dimension)
+        if not force and cache_key in _VERIFIED_COLLECTIONS:
             return
 
         from qdrant_client.http.models import (
@@ -67,6 +74,7 @@ class QdrantVectorStoreAdapter:
         collections = self._client.get_collections().collections
         exists = any(c.name == self.collection_name for c in collections)
         sparse_cfg = {"bm25": SparseVectorParams(modifier=Modifier.IDF)}
+        existing_indexes: set = set()
 
         if not exists:
             logger.info(
@@ -83,6 +91,7 @@ class QdrantVectorStoreAdapter:
                 remote_dim = info.config.params.vectors.size
                 sparse_params = getattr(info.config.params, "sparse_vectors", None) or {}
                 has_bm25 = "bm25" in sparse_params
+                existing_indexes = set((getattr(info, "payload_schema", None) or {}).keys())
                 if remote_dim != self.dimension or not has_bm25:
                     logger.warning(
                         f"Qdrant collection schema upgrade required for '{self.collection_name}' "
@@ -94,10 +103,13 @@ class QdrantVectorStoreAdapter:
                         vectors_config=VectorParams(size=self.dimension, distance=Distance.COSINE),
                         sparse_vectors_config=sparse_cfg,
                     )
+                    existing_indexes = set()
             except Exception as e:
                 logger.warning(f"Failed to verify collection schema: {e}")
 
         for field_name in ("service", "course_id", "customer_id", "doc_type", "class_name"):
+            if field_name in existing_indexes:
+                continue
             try:
                 self._client.create_payload_index(
                     collection_name=self.collection_name,
@@ -107,6 +119,8 @@ class QdrantVectorStoreAdapter:
             except Exception:
                 pass
 
+        _VERIFIED_COLLECTIONS.add(cache_key)
+
     def _init_client(self) -> None:
         if not self.url:
             return
@@ -114,8 +128,15 @@ class QdrantVectorStoreAdapter:
         try:
             from qdrant_client import QdrantClient
 
-            port = None if self.url.startswith("https://") else 6333
-            self._client = QdrantClient(url=self.url, port=port, api_key=self.api_key)
+            client_key = (self.url, self.api_key)
+            if client_key not in _SHARED_QDRANT_CLIENTS:
+                port = None if self.url.startswith("https://") else 6333
+                _SHARED_QDRANT_CLIENTS[client_key] = QdrantClient(
+                    url=self.url,
+                    port=port,
+                    api_key=self.api_key,
+                )
+            self._client = _SHARED_QDRANT_CLIENTS[client_key]
             self._ensure_collection()
         except Exception as e:
             logger.error(f"Failed to initialize Qdrant Cloud client: {e}")
@@ -131,6 +152,9 @@ class QdrantVectorStoreAdapter:
 
         if self._client is None:
             for c in chunks:
+                if len(self._memory_chunks) >= MAX_MEMORY_FALLBACK_CHUNKS and c.id not in self._memory_chunks:
+                    oldest_key = next(iter(self._memory_chunks))
+                    self._memory_chunks.pop(oldest_key, None)
                 self._memory_chunks[c.id] = c
             return len(chunks)
 
@@ -198,7 +222,7 @@ class QdrantVectorStoreAdapter:
                         logger.warning(
                             f"Collection '{self.collection_name}' missing or outdated during upsert. Auto-creating and retrying..."
                         )
-                        self._ensure_collection()
+                        self._ensure_collection(force=True)
                         self._client.upsert(
                             collection_name=self.collection_name,
                             points=points,
@@ -369,7 +393,7 @@ class QdrantVectorStoreAdapter:
                         logger.warning(
                             f"Collection '{self.collection_name}' missing during search. Auto-creating empty collection..."
                         )
-                        self._ensure_collection()
+                        self._ensure_collection(force=True)
                         return []
                     raise
 
@@ -639,7 +663,7 @@ class QdrantVectorStoreAdapter:
                         logger.warning(
                             f"Collection '{self.collection_name}' missing during delete_by_service. Auto-creating..."
                         )
-                        self._ensure_collection()
+                        self._ensure_collection(force=True)
                     else:
                         raise
 

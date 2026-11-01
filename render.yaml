@@ -18,8 +18,12 @@ services:
         value: direct
       - key: ALLOW_USER_REGISTRATION
         value: "false"
+      - key: USE_LOCAL_JINA_EMBEDDINGS
+        value: "false"
       - key: GEMINI_MODEL_ID
         value: gemini-3.6-flash
+      - key: GEMINI_EMBEDDING_MODEL_ID
+        value: gemini-embedding-001
       - key: GEMINI_FIRST_TOKEN_TIMEOUT_SECONDS
         value: "25"
       - key: QDRANT_URL

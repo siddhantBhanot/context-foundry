@@ -22,9 +22,10 @@ class Database:
     @asynccontextmanager
     async def connection(self) -> AsyncGenerator[aiosqlite.Connection, None]:
         self._ensure_dir()
-        conn = await aiosqlite.connect(str(self.db_path))
+        conn = await aiosqlite.connect(str(self.db_path), timeout=5.0)
         conn.row_factory = aiosqlite.Row
         await conn.execute("PRAGMA foreign_keys = ON;")
+        await conn.execute("PRAGMA busy_timeout = 5000;")
         try:
             yield conn
         finally:
@@ -33,6 +34,8 @@ class Database:
     async def init_schema(self) -> None:
         """Create tables and indexes if they do not already exist."""
         async with self.connection() as conn:
+            await conn.execute("PRAGMA journal_mode = WAL;")
+            await conn.execute("PRAGMA synchronous = NORMAL;")
             await conn.executescript("""
                 CREATE TABLE IF NOT EXISTS users (
                     id TEXT PRIMARY KEY,

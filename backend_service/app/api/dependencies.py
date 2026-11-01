@@ -93,49 +93,6 @@ async def get_current_user(
     return await auth_service.get_user_from_token(credentials.credentials)
 
 
-
-@lru_cache
-def get_db_instance() -> Database:
-    return get_database()
-
-
-@lru_cache
-def get_conversation_repository() -> ConversationRepository:
-    return SqliteConversationRepository(db=get_db_instance())
-
-
-@lru_cache
-def get_feedback_repository() -> FeedbackRepository:
-    return SqliteFeedbackRepository(db=get_db_instance())
-
-
-@lru_cache
-def get_rag_client() -> RAGClientProtocol:
-    settings = get_settings()
-    if settings.rag_client_mode.lower() == "mock":
-        return MockRAGClient()
-    return DirectRAGClient()
-
-
-def get_query_service() -> QueryService:
-    return QueryService(
-        conversation_repo=get_conversation_repository(),
-        rag_client=get_rag_client(),
-    )
-
-
-def get_feedback_service() -> FeedbackService:
-    return FeedbackService(
-        feedback_repo=get_feedback_repository(),
-    )
-
-
-def get_knowledge_service() -> KnowledgeService:
-    return KnowledgeService(
-        rag_client=get_rag_client(),
-    )
-
-
 @lru_cache
 def get_kt_repository():
     from backend_service.app.infrastructure.persistence.sqlite_kt_repo import SQLiteKTRepository

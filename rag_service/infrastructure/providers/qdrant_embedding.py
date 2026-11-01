@@ -22,13 +22,29 @@ class QdrantEmbeddingProvider:
         model_name: Optional[str] = None,
     ) -> None:
         self.settings = settings or get_settings()
+        self.use_local_jina = bool(getattr(self.settings, "use_local_jina_embeddings", False))
+        self._gemini_delegate = None
+        self._model = None
+        self._dim = 768
+
+        if (
+            not self.use_local_jina
+            and model_name is None
+            and hasattr(self.settings, "has_valid_gemini_key")
+            and self.settings.has_valid_gemini_key()
+        ):
+            from rag_service.infrastructure.providers.gemini_embedding import GeminiEmbeddingProvider
+
+            self._gemini_delegate = GeminiEmbeddingProvider(self.settings, dimension=768)
+            self.model_name = self._gemini_delegate.model_name
+            self._dim = self._gemini_delegate.dimension
+            return
+
         self.model_name = (
             model_name
             or getattr(self.settings, "qdrant_embedding_model", None)
             or "jinaai/jina-embeddings-v2-base-code"
         )
-        self._model = None
-        self._dim = 768
         self._init_model()
 
     def _init_model(self) -> None:
@@ -36,7 +52,7 @@ class QdrantEmbeddingProvider:
             from fastembed import TextEmbedding
 
             try:
-                self._model = TextEmbedding(model_name=self.model_name)
+                self._model = TextEmbedding(model_name=self.model_name, threads=2)
             except Exception as inner_e:
                 logger.warning(
                     "Could not load embedding model '%s' (%s), falling back to 'sentence-transformers/all-MiniLM-L6-v2'",
@@ -44,7 +60,7 @@ class QdrantEmbeddingProvider:
                     inner_e,
                 )
                 self.model_name = "sentence-transformers/all-MiniLM-L6-v2"
-                self._model = TextEmbedding(model_name=self.model_name)
+                self._model = TextEmbedding(model_name=self.model_name, threads=2)
 
             # Verify dimension dynamically
             test_res = list(self._model.embed(["probe"]))
@@ -63,6 +79,8 @@ class QdrantEmbeddingProvider:
         """Compute dense semantic embeddings for a batch of text chunks."""
         if not texts:
             return []
+        if self._gemini_delegate is not None:
+            return await self._gemini_delegate.embed(texts)
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._sync_embed, texts)
 
@@ -76,6 +94,8 @@ class QdrantEmbeddingProvider:
         """Compute dense semantic embedding for a user query."""
         if not text:
             return [0.0] * self._dim
+        if self._gemini_delegate is not None:
+            return await self._gemini_delegate.embed_query(text)
         loop = asyncio.get_running_loop()
         return await loop.run_in_executor(None, self._sync_embed_query, text)
 
