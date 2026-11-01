@@ -61,14 +61,14 @@ export function FeedbackControls({
 
   return (
     <div className="flex flex-col gap-1.5 pt-2 border-t border-slate-100">
-      <div className="flex items-center justify-between text-xs text-slate-400">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center justify-between text-xs text-slate-400 gap-2">
+        <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
           <span className="text-[11px] text-slate-400">Was this answer accurate?</span>
           
           <button
             onClick={() => handleRate('positive')}
             disabled={isSubmitting}
-            className={`p-1 rounded-md transition-all cursor-pointer flex items-center gap-1 text-[11px] ${
+            className={`p-1 px-1.5 rounded-md transition-all cursor-pointer flex items-center gap-1 text-[11px] ${
               rating === 'positive'
                 ? 'bg-emerald-100 text-emerald-700 font-semibold'
                 : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'
@@ -85,7 +85,7 @@ export function FeedbackControls({
               setShowCommentBox(true);
             }}
             disabled={isSubmitting}
-            className={`p-1 rounded-md transition-all cursor-pointer flex items-center gap-1 text-[11px] ${
+            className={`p-1 px-1.5 rounded-md transition-all cursor-pointer flex items-center gap-1 text-[11px] ${
               rating === 'negative'
                 ? 'bg-rose-100 text-rose-700 font-semibold'
                 : 'hover:bg-slate-100 text-slate-400 hover:text-slate-700'

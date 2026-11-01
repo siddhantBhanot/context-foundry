@@ -66,9 +66,9 @@ export function SourceCitationList({ sources, service }: SourceCitationListProps
             >
               <div
                 onClick={() => setExpandedIndex(isExpanded ? null : i)}
-                className="flex items-center justify-between px-3 py-2 cursor-pointer select-none bg-slate-50/50 hover:bg-slate-50 transition-colors"
+                className="flex items-center justify-between px-2.5 sm:px-3 py-2 cursor-pointer select-none bg-slate-50/50 hover:bg-slate-50 transition-colors gap-2"
               >
-                <div className="flex items-center gap-2 min-w-0 flex-1">
+                <div className="flex items-center gap-1.5 sm:gap-2 min-w-0 flex-1">
                   {/* File Icon */}
                   <div className="w-5 h-5 rounded-md flex items-center justify-center shrink-0">
                     {isCode ? (
@@ -109,7 +109,7 @@ export function SourceCitationList({ sources, service }: SourceCitationListProps
                   )}
                 </div>
 
-                <div className="flex items-center gap-2 pl-2">
+                <div className="flex items-center gap-1.5 sm:gap-2 pl-1 shrink-0">
                   {/* View Source / Document Button */}
                   {(isDoc || isCode) && (
                     <button
@@ -127,7 +127,7 @@ export function SourceCitationList({ sources, service }: SourceCitationListProps
                       title="View full source file in browser"
                     >
                       {isCode ? <FileCode className="w-3 h-3" /> : <BookOpen className="w-3 h-3" />}
-                      <span>{isCode ? 'View Code' : 'View Doc'}</span>
+                      <span>{isCode ? 'Code' : 'Doc'}</span>
                     </button>
                   )}
 

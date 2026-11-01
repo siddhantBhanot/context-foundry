@@ -58,7 +58,7 @@ export const ContextFoundryLogo: React.FC<ContextFoundryLogoProps> = ({
               Foundry
             </span>
           </div>
-          <span className="text-[9px] font-semibold tracking-wider text-slate-400 uppercase mt-0.5">
+          <span className="text-[9px] font-semibold tracking-wider text-slate-400 uppercase mt-0.5 hidden sm:inline">
             Dev Central · Eng Intelligence
           </span>
         </div>

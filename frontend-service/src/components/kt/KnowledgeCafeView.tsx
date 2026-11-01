@@ -357,17 +357,30 @@ export function KnowledgeCafeView({
 
   return (
     <div className="flex-1 flex overflow-hidden h-full relative">
+      {/* Backdrop overlay for mobile when sidebar is open */}
+      {isSidebarOpen && (
+        <div
+          onClick={() => setIsSidebarOpen(false)}
+          className="fixed inset-0 z-30 bg-slate-900/40 backdrop-blur-xs md:hidden"
+        />
+      )}
+
       {/* 10-Lesson Creator Curriculum Sidebar */}
       <div
-        className={`relative transition-[width,margin] duration-300 ease-in-out shrink-0 h-full flex ${
-          isSidebarOpen ? 'w-80 md:w-88' : 'w-0'
+        className={`fixed md:relative inset-y-0 left-0 z-40 md:z-auto bg-white transition-[width,margin,transform] duration-300 ease-in-out shrink-0 h-full flex shadow-xl md:shadow-none ${
+          isSidebarOpen ? 'w-80 md:w-88 translate-x-0' : 'w-0 -translate-x-full md:translate-x-0'
         }`}
       >
         <div className="w-80 md:w-88 h-full overflow-hidden">
           <CurriculumSidebar
             course={activeCourse}
             activeLessonId={activeLessonId || ''}
-            onSelectLesson={handleSelectLesson}
+            onSelectLesson={(lessonId: string) => {
+              handleSelectLesson(lessonId);
+              if (window.innerWidth < 768) {
+                setIsSidebarOpen(false);
+              }
+            }}
             onBackToCatalog={handleBackToCatalog}
           />
         </div>

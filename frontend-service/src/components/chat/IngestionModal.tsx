@@ -365,54 +365,54 @@ export function IngestionModal({
       <div className="bg-white rounded-3xl border border-slate-200 shadow-2xl max-w-2xl w-full my-8 p-6 space-y-5 animate-in fade-in zoom-in-95 duration-150">
         
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-2xl bg-orange-100 text-[#f05a28] flex items-center justify-center shadow-2xs">
+        <div className="flex items-center justify-between pb-3 border-b border-slate-100 gap-2">
+          <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-orange-100 text-[#f05a28] flex items-center justify-center shadow-2xs shrink-0">
               <UploadCloud className="w-5 h-5" />
             </div>
-            <div>
-              <h3 className="font-bold text-base text-slate-900">Knowledge Ingestion & Staging</h3>
-              <p className="text-xs text-slate-500">Upload documentation & courses for verification before indexing</p>
+            <div className="min-w-0">
+              <h3 className="font-bold text-sm sm:text-base text-slate-900 truncate">Knowledge Ingestion & Staging</h3>
+              <p className="text-[11px] sm:text-xs text-slate-500 truncate">Upload docs & code before indexing</p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer"
+            className="p-1.5 sm:p-2 rounded-full hover:bg-slate-100 text-slate-400 hover:text-slate-600 transition-colors cursor-pointer shrink-0"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {/* Tab Switcher: Dev Chat vs Knowledge Cafe */}
-        <div className="flex bg-slate-100 p-1 rounded-2xl">
+        <div className="flex bg-slate-100 p-1 rounded-2xl gap-1">
           <button
             onClick={() => setActiveTab('dev-chat')}
-            className={`flex-1 py-2 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            className={`flex-1 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
               activeTab === 'dev-chat'
                 ? 'bg-white text-slate-900 shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <FileText className="w-4 h-4 text-[#f05a28]" />
-            <span>Code & Docs (.kt, .java, .py, .md, .pdf)</span>
+            <FileText className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#f05a28] shrink-0" />
+            <span className="truncate">Code & Docs</span>
             {pendingDocsCount > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500 text-white font-bold">
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500 text-white font-bold shrink-0">
                 {pendingDocsCount}
               </span>
             )}
           </button>
           <button
             onClick={() => setActiveTab('knowledge-cafe')}
-            className={`flex-1 py-2 text-xs font-bold rounded-xl flex items-center justify-center gap-2 transition-all cursor-pointer ${
+            className={`flex-1 py-1.5 sm:py-2 text-[11px] sm:text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer ${
               activeTab === 'knowledge-cafe'
                 ? 'bg-white text-slate-900 shadow-xs'
                 : 'text-slate-600 hover:text-slate-900'
             }`}
           >
-            <BookOpen className="w-4 h-4 text-[#f05a28]" />
-            <span>Knowledge Cafe Courses (.zip)</span>
+            <BookOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-[#f05a28] shrink-0" />
+            <span className="truncate">Courses (.zip)</span>
             {pendingCourses.length > 0 && (
-              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500 text-white font-bold">
+              <span className="px-1.5 py-0.5 rounded-full text-[10px] bg-amber-500 text-white font-bold shrink-0">
                 {pendingCourses.length}
               </span>
             )}

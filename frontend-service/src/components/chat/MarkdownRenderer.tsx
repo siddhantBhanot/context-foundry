@@ -76,15 +76,15 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
             }
 
             return (
-              <div className="my-3 rounded-xl overflow-hidden border border-slate-700/60 bg-[#1e2433] shadow-md max-w-full min-w-0">
-                <div className="flex items-center justify-between px-3.5 py-2 bg-[#151922] border-b border-slate-700/50 text-xs font-mono text-slate-400">
-                  <span className="uppercase tracking-wider font-semibold text-amber-400 text-[11px]">
+              <div className="my-3 rounded-xl overflow-hidden border border-slate-700/60 bg-[#1e2433] shadow-md w-full max-w-full min-w-0">
+                <div className="flex items-center justify-between px-3 sm:px-3.5 py-2 bg-[#151922] border-b border-slate-700/50 text-xs font-mono text-slate-400">
+                  <span className="uppercase tracking-wider font-semibold text-amber-400 text-[10px] sm:text-[11px] truncate max-w-[140px] sm:max-w-none">
                     {language || 'text'}
                   </span>
                   <button
                     onClick={() => handleCopy(codeString)}
                     type="button"
-                    className="flex items-center gap-1.5 text-slate-300 hover:text-white transition-colors px-2 py-1 rounded bg-slate-800/80 hover:bg-slate-700 text-[11px] cursor-pointer"
+                    className="flex items-center gap-1.5 text-slate-300 hover:text-white transition-colors px-2 py-1 rounded bg-slate-800/80 hover:bg-slate-700 text-[10px] sm:text-[11px] cursor-pointer shrink-0"
                     title="Copy code"
                   >
                     {copiedCode === codeString ? (
@@ -100,17 +100,18 @@ export const MarkdownRenderer: React.FC<MarkdownRendererProps> = ({ content }) =
                     )}
                   </button>
                 </div>
-                <div className="overflow-x-auto text-xs">
+                <div className="overflow-x-auto text-[11px] sm:text-xs w-full max-w-full">
                   <SyntaxHighlighter
                     style={oneDark}
                     language={language || 'text'}
                     PreTag="div"
                     customStyle={{
                       margin: 0,
-                      padding: '1rem',
+                      padding: '0.75rem sm:1rem',
                       background: 'transparent',
-                      fontSize: '0.8125rem',
+                      fontSize: 'inherit',
                       lineHeight: '1.5',
+                      maxWidth: '100%',
                     }}
                   >
                     {codeString}

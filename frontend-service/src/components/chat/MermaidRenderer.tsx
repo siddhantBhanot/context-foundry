@@ -329,20 +329,20 @@ export const MermaidRenderer: React.FC<MermaidRendererProps> = ({ chart }) => {
   }
 
   return (
-    <div className="my-4 rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden transition-all">
+    <div className="my-4 rounded-2xl border border-slate-200 bg-white shadow-xs overflow-hidden transition-all max-w-full w-full min-w-0">
       {/* Header bar */}
-      <div className="flex items-center justify-between px-4 py-2.5 bg-slate-50/80 border-b border-slate-200/80 text-xs text-slate-600">
-        <div className="flex items-center gap-2 font-semibold text-slate-800">
-          <Workflow className="w-4 h-4 text-[#f05a28]" />
-          <span>Architecture & Flow Diagram</span>
+      <div className="flex items-center justify-between px-3 sm:px-4 py-2 sm:py-2.5 bg-slate-50/80 border-b border-slate-200/80 text-xs text-slate-600 gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 font-semibold text-slate-800 min-w-0">
+          <Workflow className="w-4 h-4 text-[#f05a28] shrink-0" />
+          <span className="truncate">Architecture & Flow Diagram</span>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
           {/* Toggle between rendered diagram and code */}
           <button
             onClick={() => setShowCode(!showCode)}
             type="button"
-            className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors text-[11px] font-medium cursor-pointer shadow-2xs"
+            className="flex items-center gap-1 sm:gap-1.5 px-2 sm:px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors text-[10px] sm:text-[11px] font-medium cursor-pointer shadow-2xs"
             title={showCode ? 'View Diagram' : 'View Code'}
           >
             {showCode ? (
@@ -362,7 +362,7 @@ export const MermaidRenderer: React.FC<MermaidRendererProps> = ({ chart }) => {
           <button
             onClick={handleCopy}
             type="button"
-            className="flex items-center gap-1 px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors text-[11px] font-medium cursor-pointer shadow-2xs"
+            className="flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 transition-colors text-[10px] sm:text-[11px] font-medium cursor-pointer shadow-2xs"
             title="Copy Mermaid code"
           >
             {copied ? (
@@ -381,10 +381,10 @@ export const MermaidRenderer: React.FC<MermaidRendererProps> = ({ chart }) => {
       </div>
 
       {/* Content Area */}
-      <div className="p-4 sm:p-6 bg-linear-to-b from-white to-slate-50/40">
+      <div className="p-2 sm:p-4 md:p-6 bg-linear-to-b from-white to-slate-50/40 max-w-full overflow-hidden">
         {showCode ? (
-          <div className="rounded-xl overflow-hidden border border-slate-700/60 bg-[#1e2433]">
-            <pre className="p-4 text-xs font-mono text-slate-200 overflow-x-auto whitespace-pre leading-relaxed">
+          <div className="rounded-xl overflow-hidden border border-slate-700/60 bg-[#1e2433] max-w-full">
+            <pre className="p-3 sm:p-4 text-[11px] sm:text-xs font-mono text-slate-200 overflow-x-auto whitespace-pre leading-relaxed">
               {chart}
             </pre>
           </div>
@@ -395,7 +395,7 @@ export const MermaidRenderer: React.FC<MermaidRendererProps> = ({ chart }) => {
           </div>
         ) : (
           <div
-            className="w-full overflow-x-auto flex justify-center items-center py-2 [&>svg]:max-w-full [&>svg]:h-auto [&>svg]:mx-auto transition-opacity duration-200"
+            className="w-full max-w-full overflow-x-auto flex justify-start sm:justify-center items-center py-2 px-1 [&>svg]:max-w-none sm:[&>svg]:max-w-full [&>svg]:h-auto transition-opacity duration-200"
             dangerouslySetInnerHTML={{ __html: svg }}
           />
         )}

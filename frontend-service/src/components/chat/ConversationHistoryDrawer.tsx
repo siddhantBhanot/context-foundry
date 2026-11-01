@@ -43,7 +43,7 @@ export function ConversationHistoryDrawer({
 
   return (
     <div className="fixed inset-0 z-50 flex justify-end bg-slate-900/40 backdrop-blur-xs">
-      <div className="bg-white w-full max-w-sm h-full shadow-2xl flex flex-col p-6 space-y-4 animate-in slide-in-from-right duration-200">
+      <div className="bg-white w-full sm:max-w-sm h-full shadow-2xl flex flex-col p-4 sm:p-6 space-y-4 animate-in slide-in-from-right duration-200">
         <div className="flex items-center justify-between pb-3 border-b border-slate-100">
           <div className="flex items-center gap-2">
             <MessageSquare className="w-4 h-4 text-[#f05a28]" />

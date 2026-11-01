@@ -11,6 +11,7 @@ import {
   Layers,
   Loader2,
   LogOut,
+  Menu,
   MessageSquare,
   RotateCcw,
   Sparkles,
@@ -19,6 +20,7 @@ import {
   Share2,
   Cpu,
   UploadCloud,
+  X,
 } from 'lucide-react';
 
 import { MarkdownRenderer } from '@/components/chat/MarkdownRenderer';
@@ -102,6 +104,7 @@ function DashboardApp() {
     file: string;
     service: string;
   }>({ isOpen: false, file: '', service: '' });
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState<boolean>(false);
 
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -419,52 +422,208 @@ function DashboardApp() {
 
   return (
 
-    <div className="min-h-screen bg-[#edf3f8] flex flex-col justify-between px-3 sm:px-5 md:px-8 py-3 sm:py-4 md:py-6 font-sans antialiased text-slate-800">
+    <div className="min-h-screen bg-[#edf3f8] flex flex-col justify-between px-2 sm:px-5 md:px-8 py-2 sm:py-4 md:py-6 font-sans antialiased text-slate-800">
       {/* Outer White Card styled container */}
-      <div className="w-full max-w-7xl mx-auto bg-white rounded-[24px] md:rounded-[36px] shadow-sm border border-slate-100 flex flex-col min-h-[92vh] md:min-h-[94vh] overflow-hidden">
+      <div className="w-full max-w-7xl mx-auto bg-white rounded-[20px] sm:rounded-[28px] md:rounded-[36px] shadow-sm border border-slate-100 flex flex-col min-h-[96vh] md:min-h-[94vh] overflow-hidden">
         
         {/* Persistent Top Header */}
-        <header className="px-6 md:px-10 py-5 flex items-center justify-between border-b border-slate-100 bg-white shrink-0">
-          {/* ContextFoundry Logo on Left */}
-          <div className="flex items-center gap-2.5">
-            <button
-              onClick={handleResetHome}
-              className="flex items-center text-left group cursor-pointer focus:outline-none"
-              title="Return to Home"
-            >
-              <ContextFoundryLogo />
-            </button>
-            <span className="text-[10px] font-bold tracking-wider uppercase hidden xl:inline-block border-l border-slate-200 pl-2.5 self-center py-0.5 text-slate-400">
-              Engineering Intelligence
-            </span>
+        <header className="px-3 sm:px-6 md:px-10 py-3 sm:py-5 flex flex-col gap-2.5 border-b border-slate-100 bg-white shrink-0">
+          <div className="flex items-center justify-between w-full">
+            {/* ContextFoundry Logo on Left */}
+            <div className="flex items-center gap-2 sm:gap-2.5">
+              <button
+                onClick={() => {
+                  handleResetHome();
+                  setIsMobileMenuOpen(false);
+                }}
+                className="flex items-center text-left group cursor-pointer focus:outline-none"
+                title="Return to Home"
+              >
+                <ContextFoundryLogo size="sm" />
+              </button>
+              <span className="text-[10px] font-bold tracking-wider uppercase hidden xl:inline-block border-l border-slate-200 pl-2.5 self-center py-0.5 text-slate-400">
+                Engineering Intelligence
+              </span>
+            </div>
+
+            {/* Desktop Center Mode Switcher: Dev Chat & Knowledge Cafe */}
+            <div className="hidden md:flex items-center bg-slate-100/90 p-1.5 rounded-full border border-slate-200/80 shadow-2xs gap-1">
+              <button
+                onClick={() => setActiveMode('chat')}
+                className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                  activeMode === 'chat'
+                    ? 'bg-white text-slate-900 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                <MessageSquare className="w-4 h-4" />
+                <span>Dev Chat</span>
+              </button>
+
+              <button
+                onClick={() => setActiveMode('knowledge-cafe')}
+                className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+                  activeMode === 'knowledge-cafe'
+                    ? 'bg-[#f05a28] text-white shadow-xs'
+                    : 'text-slate-500 hover:text-slate-900'
+                }`}
+              >
+                <GraduationCap className="w-4 h-4" />
+                <span>Knowledge Cafe</span>
+                <span
+                  className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider ${
+                    activeMode === 'knowledge-cafe'
+                      ? 'bg-white/25 text-white'
+                      : 'bg-orange-100 text-[#f05a28]'
+                  }`}
+                >
+                  KT
+                </span>
+              </button>
+            </div>
+
+            {/* Right Actions for Desktop + Mobile Menu Toggle */}
+            <div className="flex items-center gap-1.5 sm:gap-2.5">
+              {/* Share Button (Desktop & Tablet) */}
+              {currentConversationId && isChatActive && (
+                <button
+                  onClick={handleOpenShare}
+                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-[#f05a28] bg-orange-50 hover:bg-orange-100 transition-colors cursor-pointer shadow-2xs"
+                  title="Share this conversation"
+                >
+                  <Share2 className="w-3.5 h-3.5" />
+                  <span>Share</span>
+                </button>
+              )}
+
+              {/* New Chat Button (Desktop & Tablet) */}
+              {isChatActive && (
+                <button
+                  onClick={handleResetHome}
+                  className="hidden sm:flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+                  title="Start a new conversation"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>New Chat</span>
+                </button>
+              )}
+
+              {/* Ingestion Modal Trigger (Desktop) */}
+              <button
+                onClick={() => setIsIngestionModalOpen(true)}
+                className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+                title="Upload and stage documentation or courses"
+              >
+                <UploadCloud className="w-4 h-4 text-[#f05a28]" />
+                <span>Upload Docs</span>
+              </button>
+
+              {/* Conversation History Drawer Trigger (Desktop) */}
+              <button
+                onClick={() => setIsHistoryDrawerOpen(true)}
+                className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-full text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
+                title="View conversation history"
+              >
+                <History className="w-4 h-4 text-slate-500" />
+                <span>History</span>
+              </button>
+
+              {/* User Identity & Logout (Desktop) */}
+              <div className="hidden md:flex items-center gap-2 pl-3 border-l border-slate-200 ml-1">
+                <div
+                  className="flex items-center gap-2 px-2.5 py-1 rounded-full bg-slate-50 border border-slate-200/80 text-xs"
+                  title={`Signed in as ${user?.email}`}
+                >
+                  <span className="w-5 h-5 rounded-full bg-[#f05a28] text-white font-bold text-[10px] flex items-center justify-center uppercase shadow-xs">
+                    {user?.name ? user.name.charAt(0) : 'E'}
+                  </span>
+                  <div className="flex flex-col text-left">
+                    <span className="font-semibold text-slate-700 max-w-[110px] truncate leading-tight">
+                      {user?.name || user?.email}
+                    </span>
+                    <span className="text-[9px] font-bold text-slate-400 uppercase leading-none">
+                      {user?.role || 'Engineer'}
+                    </span>
+                  </div>
+                </div>
+
+                <button
+                  type="button"
+                  onClick={() => {
+                    handleResetHome();
+                    logout();
+                  }}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
+                  title="Sign out"
+                >
+                  <LogOut className="w-3.5 h-3.5" />
+                  <span>Logout</span>
+                </button>
+              </div>
+
+              {/* Mobile Quick Action Buttons & Menu Trigger */}
+              <div className="flex md:hidden items-center gap-1">
+                {/* Mobile Ingestion Icon */}
+                <button
+                  onClick={() => setIsIngestionModalOpen(true)}
+                  className="p-2 rounded-full text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+                  title="Upload Docs"
+                >
+                  <UploadCloud className="w-4 h-4 text-[#f05a28]" />
+                </button>
+
+                {/* Mobile History Icon */}
+                <button
+                  onClick={() => setIsHistoryDrawerOpen(true)}
+                  className="p-2 rounded-full text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors"
+                  title="Conversation History"
+                >
+                  <History className="w-4 h-4 text-slate-500" />
+                </button>
+
+                {/* Mobile Menu Toggle Button */}
+                <button
+                  onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                  className="p-2 rounded-full text-slate-700 hover:bg-slate-100 transition-colors cursor-pointer"
+                  title="Open mobile navigation menu"
+                  aria-label="Toggle navigation menu"
+                >
+                  {isMobileMenuOpen ? (
+                    <X className="w-5 h-5 text-slate-700" />
+                  ) : (
+                    <Menu className="w-5 h-5 text-slate-700" />
+                  )}
+                </button>
+              </div>
+            </div>
           </div>
 
-          {/* Center Mode Switcher: Dev Chat & Knowledge Cafe */}
-          <div className="flex items-center bg-slate-100/90 p-1.5 rounded-full border border-slate-200/80 shadow-2xs gap-1">
+          {/* Mobile Mode Switcher Row (Dev Chat / Knowledge Cafe) */}
+          <div className="flex md:hidden items-center bg-slate-100 p-1 rounded-full border border-slate-200/80 w-full">
             <button
               onClick={() => setActiveMode('chat')}
-              className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
                 activeMode === 'chat'
                   ? 'bg-white text-slate-900 shadow-xs'
                   : 'text-slate-500 hover:text-slate-900'
               }`}
             >
-              <MessageSquare className="w-4 h-4" />
+              <MessageSquare className="w-3.5 h-3.5" />
               <span>Dev Chat</span>
             </button>
 
             <button
               onClick={() => setActiveMode('knowledge-cafe')}
-              className={`flex items-center gap-2 px-4 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
+              className={`flex-1 flex items-center justify-center gap-1.5 py-1.5 rounded-full text-xs font-semibold transition-all cursor-pointer ${
                 activeMode === 'knowledge-cafe'
                   ? 'bg-[#f05a28] text-white shadow-xs'
                   : 'text-slate-500 hover:text-slate-900'
               }`}
             >
-              <GraduationCap className="w-4 h-4" />
+              <GraduationCap className="w-3.5 h-3.5" />
               <span>Knowledge Cafe</span>
               <span
-                className={`text-[9px] font-bold px-1.5 py-0.5 rounded-full uppercase tracking-wider ${
+                className={`text-[8px] font-bold px-1 py-0.2 rounded-full uppercase tracking-wider ${
                   activeMode === 'knowledge-cafe'
                     ? 'bg-white/25 text-white'
                     : 'bg-orange-100 text-[#f05a28]'
@@ -475,84 +634,65 @@ function DashboardApp() {
             </button>
           </div>
 
-          {/* Right Actions: Knowledge Ingest, History, New Chat, User */}
-          <div className="flex items-center gap-2.5 sm:gap-3.5">
-            {/* Knowledge Ingestion Modal Trigger */}
-            <button
-              onClick={() => setIsIngestionModalOpen(true)}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
-              title="Upload and stage documentation or courses"
-            >
-              <UploadCloud className="w-4 h-4 text-[#f05a28]" />
-              <span className="hidden md:inline">Upload Docs</span>
-            </button>
-
-            {/* Conversation History Drawer Trigger */}
-            <button
-              onClick={() => setIsHistoryDrawerOpen(true)}
-              className="flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
-              title="View conversation history"
-            >
-              <History className="w-4 h-4 text-slate-500" />
-              <span className="hidden md:inline">History</span>
-            </button>
-
-            {/* Share Button when conversation is active */}
-            {currentConversationId && isChatActive && (
-              <button
-                onClick={handleOpenShare}
-                className="flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-semibold text-[#f05a28] bg-orange-50 hover:bg-orange-100 transition-colors cursor-pointer shadow-2xs"
-                title="Share this conversation"
-              >
-                <Share2 className="w-4 h-4" />
-                <span className="hidden sm:inline">Share</span>
-              </button>
-            )}
-
-            {isChatActive && (
-              <button
-                onClick={handleResetHome}
-                className="flex items-center gap-2 px-3.5 py-2 rounded-full text-xs font-semibold text-slate-600 hover:text-slate-900 hover:bg-slate-100 transition-colors cursor-pointer"
-                title="Start a new conversation"
-              >
-                <RotateCcw className="w-4 h-4" />
-                <span className="hidden sm:inline">New Chat</span>
-              </button>
-            )}
-
-            {/* User Identity & Logout */}
-            <div className="flex items-center gap-2.5 pl-3 sm:pl-4 border-l border-slate-200 ml-1">
-              <div
-                className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-50 border border-slate-200/80 text-xs"
-                title={`Signed in as ${user?.email} (Engineering Team)`}
-              >
-                <span className="w-5 h-5 rounded-full bg-[#f05a28] text-white font-bold text-[10px] flex items-center justify-center uppercase shadow-xs">
-                  {user?.name ? user.name.charAt(0) : 'E'}
-                </span>
-                <div className="flex flex-col text-left">
-                  <span className="font-semibold text-slate-700 max-w-[120px] truncate hidden md:inline leading-tight">
-                    {user?.name || user?.email}
+          {/* Mobile Collapsible Actions Drawer */}
+          {isMobileMenuOpen && (
+            <div className="md:hidden pt-2 pb-1 border-t border-slate-100 flex flex-col gap-2 animate-in fade-in slide-in-from-top-2 duration-150">
+              <div className="flex items-center justify-between p-2 rounded-xl bg-slate-50 border border-slate-200/70">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="w-6 h-6 rounded-full bg-[#f05a28] text-white font-bold text-xs flex items-center justify-center uppercase shrink-0">
+                    {user?.name ? user.name.charAt(0) : 'E'}
                   </span>
-                  <span className="text-[9px] font-bold text-slate-400 uppercase hidden md:inline leading-none">
-                    {user?.role || 'Engineer'}
-                  </span>
+                  <div className="flex flex-col min-w-0">
+                    <span className="font-semibold text-xs text-slate-800 truncate">
+                      {user?.name || user?.email}
+                    </span>
+                    <span className="text-[10px] text-slate-400 capitalize">
+                      {user?.role || 'Developer'}
+                    </span>
+                  </div>
                 </div>
+
+                <button
+                  onClick={() => {
+                    handleResetHome();
+                    logout();
+                  }}
+                  className="flex items-center gap-1 px-2.5 py-1 rounded-lg text-xs font-medium text-rose-600 bg-rose-50 hover:bg-rose-100 transition-colors shrink-0"
+                >
+                  <LogOut className="w-3 h-3" />
+                  <span>Logout</span>
+                </button>
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  handleResetHome();
-                  logout();
-                }}
-                className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold text-slate-500 hover:text-rose-600 hover:bg-rose-50 transition-all cursor-pointer"
-                title="Sign out of Dev Central"
-              >
-                <LogOut className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Logout</span>
-              </button>
+              <div className="grid grid-cols-2 gap-2">
+                {currentConversationId && isChatActive && (
+                  <button
+                    onClick={() => {
+                      handleOpenShare();
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold text-[#f05a28] bg-orange-50 border border-orange-200/60"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    <span>Share Thread</span>
+                  </button>
+                )}
+
+                {isChatActive && (
+                  <button
+                    onClick={() => {
+                      handleResetHome();
+                      setIsMobileMenuOpen(false);
+                    }}
+                    className="flex items-center justify-center gap-1.5 py-2 px-3 rounded-xl text-xs font-semibold text-slate-700 bg-slate-100 border border-slate-200/60"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" />
+                    <span>New Chat</span>
+                  </button>
+                )}
+              </div>
             </div>
-          </div>
+          )}
         </header>
 
 
@@ -600,23 +740,23 @@ function DashboardApp() {
           /* =========================================================================
              1. HOME SCREEN
              ========================================================================= */
-          <main className="flex-1 px-6 md:px-12 py-8 md:py-12 flex flex-col justify-center items-center">
+          <main className="flex-1 px-3 sm:px-6 md:px-12 py-6 sm:py-8 md:py-12 flex flex-col justify-center items-center">
             <div className="w-full max-w-2xl mx-auto flex flex-col items-center">
               
               {/* Badge: # Developer knowledge base */}
-              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-[11px] font-medium border border-slate-200/80 mb-5 shadow-2xs">
+              <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-600 text-[11px] font-medium border border-slate-200/80 mb-4 sm:mb-5 shadow-2xs">
                 <Sparkles className="w-3 h-3 text-[#f05a28]" />
                 <span>Developer knowledge base</span>
               </div>
 
               {/* Main Heading: Ask anything about your services */}
-              <h1 className="text-3xl sm:text-4xl md:text-5xl font-black text-slate-900 tracking-tight text-center leading-[1.15] mb-3">
+              <h1 className="text-2xl sm:text-4xl md:text-5xl font-black text-slate-900 tracking-tight text-center leading-[1.15] mb-2 sm:mb-3">
                 Ask anything about <br />
                 your services
               </h1>
 
               {/* Subtitle with bolded keywords */}
-              <p className="text-slate-500 text-xs sm:text-sm text-center max-w-lg leading-relaxed mb-8">
+              <p className="text-slate-500 text-xs sm:text-sm text-center max-w-lg leading-relaxed mb-6 sm:mb-8 px-2">
                 Get instant, grounded answers on <span className="font-semibold text-slate-700">APIs</span>,{' '}
                 <span className="font-semibold text-slate-700">business logic</span>,{' '}
                 <span className="font-semibold text-slate-700">request flows</span>, and{' '}
@@ -627,8 +767,8 @@ function DashboardApp() {
               {(() => {
                 if (services.length === 0) {
                   return (
-                    <div className="w-full mb-5 p-4 rounded-2xl bg-orange-50/90 border border-orange-200/90 text-left flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
-                      <div className="flex items-start gap-3">
+                    <div className="w-full mb-5 p-3.5 sm:p-4 rounded-2xl bg-orange-50/90 border border-orange-200/90 text-left flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+                      <div className="flex items-start gap-2.5 sm:gap-3">
                         <div className="p-2 rounded-xl bg-white text-[#f05a28] shadow-2xs shrink-0 mt-0.5 sm:mt-0">
                           <UploadCloud className="w-5 h-5" />
                         </div>
@@ -643,7 +783,7 @@ function DashboardApp() {
                       </div>
                       <button
                         onClick={() => setIsIngestionModalOpen(true)}
-                        className="px-4 py-2 bg-[#f05a28] hover:bg-[#d94b1c] text-white text-xs font-bold rounded-xl shadow-2xs transition-colors shrink-0 cursor-pointer"
+                        className="w-full sm:w-auto px-4 py-2 bg-[#f05a28] hover:bg-[#d94b1c] text-white text-xs font-bold rounded-xl shadow-2xs transition-colors shrink-0 cursor-pointer text-center"
                       >
                         + Add Microservice
                       </button>
@@ -654,8 +794,8 @@ function DashboardApp() {
                 const hasDocs = activeSvc ? (activeSvc.doc_count !== undefined ? activeSvc.doc_count > 0 : activeSvc.has_indexed_data) : true;
                 if (!hasDocs) {
                   return (
-                    <div className="w-full mb-5 p-4 rounded-2xl bg-orange-50/90 border border-orange-200/90 text-left flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
-                      <div className="flex items-start gap-3">
+                    <div className="w-full mb-5 p-3.5 sm:p-4 rounded-2xl bg-orange-50/90 border border-orange-200/90 text-left flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 shadow-2xs">
+                      <div className="flex items-start gap-2.5 sm:gap-3">
                         <div className="p-2 rounded-xl bg-white text-[#f05a28] shadow-2xs shrink-0 mt-0.5 sm:mt-0">
                           <UploadCloud className="w-5 h-5" />
                         </div>
@@ -670,7 +810,7 @@ function DashboardApp() {
                       </div>
                       <button
                         onClick={() => setIsIngestionModalOpen(true)}
-                        className="px-4 py-2 bg-[#f05a28] hover:bg-[#d94b1c] text-white text-xs font-bold rounded-xl shadow-2xs transition-colors shrink-0 cursor-pointer"
+                        className="w-full sm:w-auto px-4 py-2 bg-[#f05a28] hover:bg-[#d94b1c] text-white text-xs font-bold rounded-xl shadow-2xs transition-colors shrink-0 cursor-pointer text-center"
                       >
                         Upload Code & Docs
                       </button>
@@ -681,10 +821,10 @@ function DashboardApp() {
               })()}
 
               {/* Central Input Box Container */}
-              <div className="w-full bg-white rounded-2xl border border-slate-200 shadow-xs p-4 mb-8 transition-all focus-within:border-slate-300 focus-within:shadow-md">
+              <div className="w-full bg-white rounded-2xl border border-slate-200 shadow-xs p-3 sm:p-4 mb-6 sm:mb-8 transition-all focus-within:border-slate-300 focus-within:shadow-md">
                 {/* Top Row: Context Selectors (SERVICE + MODEL) */}
                 <div className="flex flex-wrap items-center justify-between gap-2 mb-2">
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase">
                       SERVICE
                     </span>
@@ -698,7 +838,7 @@ function DashboardApp() {
                             setSelectedService(e.target.value);
                           }
                         }}
-                        className="appearance-none bg-slate-100 hover:bg-slate-200/70 text-slate-700 text-xs font-semibold pl-2.5 pr-6 py-1 rounded-lg border border-slate-200/60 focus:outline-none cursor-pointer"
+                        className="appearance-none bg-slate-100 hover:bg-slate-200/70 text-slate-700 text-xs font-semibold pl-2.5 pr-6 py-1 rounded-lg border border-slate-200/60 focus:outline-none cursor-pointer max-w-[200px] truncate"
                       >
                         {services.length === 0 && (
                           <option value="" disabled>
@@ -718,7 +858,7 @@ function DashboardApp() {
 
 
                   {models.length > 0 && (
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase flex items-center gap-1">
                         <Cpu className="w-3 h-3 text-[#f05a28]" />
                         MODEL
@@ -727,7 +867,7 @@ function DashboardApp() {
                         <select
                           value={selectedModel}
                           onChange={(e) => setSelectedModel(e.target.value)}
-                          className="appearance-none bg-slate-100 hover:bg-slate-200/70 text-slate-700 text-xs font-semibold pl-2.5 pr-6 py-1 rounded-lg border border-slate-200/60 focus:outline-none cursor-pointer"
+                          className="appearance-none bg-slate-100 hover:bg-slate-200/70 text-slate-700 text-xs font-semibold pl-2.5 pr-6 py-1 rounded-lg border border-slate-200/60 focus:outline-none cursor-pointer max-w-[190px] truncate"
                         >
                           {models.map((m) => (
                             <option key={m.id} value={m.id}>
@@ -792,13 +932,13 @@ function DashboardApp() {
                     <button
                       key={item.id}
                       onClick={() => handleStartChat(item.query)}
-                      className="bg-white hover:bg-slate-50/80 border border-slate-200/90 rounded-2xl p-4 flex items-start gap-3.5 transition-all text-left group cursor-pointer shadow-2xs hover:shadow-xs"
+                      className="bg-white hover:bg-slate-50/80 border border-slate-200/90 rounded-2xl p-3.5 sm:p-4 flex items-start gap-3 sm:gap-3.5 transition-all text-left group cursor-pointer shadow-2xs hover:shadow-xs"
                     >
                       <div className="w-8 h-8 rounded-xl bg-orange-50 group-hover:bg-orange-100 text-[#f05a28] flex items-center justify-center shrink-0 transition-colors">
                         <Icon className="w-4 h-4" />
                       </div>
-                      <div>
-                        <h4 className="font-bold text-sm text-slate-900 group-hover:text-[#f05a28] transition-colors">
+                      <div className="min-w-0">
+                        <h4 className="font-bold text-sm text-slate-900 group-hover:text-[#f05a28] transition-colors truncate">
                           {item.title}
                         </h4>
                         <p className="text-xs text-slate-500 leading-relaxed mt-0.5">
@@ -811,7 +951,7 @@ function DashboardApp() {
               </div>
 
               {/* Disclaimer at bottom */}
-              <div className="text-center text-[11px] text-slate-400 mt-10 space-y-0.5">
+              <div className="text-center text-[11px] text-slate-400 mt-8 sm:mt-10 space-y-0.5">
                 <p>Answers are grounded live with Qdrant Cloud vectors and Groq inference.</p>
                 <p className="text-[10px] text-slate-400">ContextFoundry · Developer Assistant</p>
               </div>
@@ -822,14 +962,14 @@ function DashboardApp() {
           /* =========================================================================
              2. CHAT WINDOW
              ========================================================================= */
-          <main className="flex-1 flex flex-col justify-between p-4 md:p-8 min-w-0 bg-white">
+          <main className="flex-1 flex flex-col justify-between p-2.5 sm:p-4 md:p-8 min-w-0 bg-white">
             
             {/* Scrollable Conversation Stream */}
-            <div className="flex-1 overflow-y-auto max-w-3xl mx-auto w-full space-y-6 pb-6 pr-1">
+            <div className="flex-1 overflow-y-auto max-w-3xl mx-auto w-full space-y-4 sm:space-y-6 pb-4 sm:pb-6 pr-0.5 sm:pr-1 min-w-0">
               
               {/* Service header indicator */}
-              <div className="flex items-center justify-center gap-2 py-1">
-                <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-3 py-1 rounded-full border border-slate-200">
+              <div className="flex items-center justify-center gap-1.5 sm:gap-2 py-1 flex-wrap">
+                <span className="text-xs font-semibold text-slate-500 bg-slate-100 px-2.5 sm:px-3 py-1 rounded-full border border-slate-200 truncate max-w-[220px]">
                   Inspecting: <span className="text-[#f05a28] font-mono">{selectedService}</span>
                 </span>
                 {currentConversationId && (
@@ -841,7 +981,7 @@ function DashboardApp() {
 
               {/* Shared Thread Indicator Banner */}
               {sharedInfo && (
-                <div className="p-3.5 rounded-2xl bg-amber-50 border border-amber-200/80 text-amber-950 text-xs flex items-center justify-between gap-3 shadow-xs animate-in fade-in duration-150">
+                <div className="p-3 sm:p-3.5 rounded-2xl bg-amber-50 border border-amber-200/80 text-amber-950 text-xs flex items-center justify-between gap-3 shadow-xs animate-in fade-in duration-150">
                   <div className="flex items-center gap-2.5 min-w-0">
                     <GitBranch className="w-4 h-4 text-amber-700 shrink-0" />
                     <div className="min-w-0">
@@ -876,39 +1016,39 @@ function DashboardApp() {
                   {msg.role === 'user' ? (
                     /* User Message Bubble */
                     <div className="flex justify-end min-w-0">
-                      <div className="max-w-[85%] min-w-0 rounded-2xl rounded-tr-xs bg-slate-900 px-4 py-2.5 text-xs sm:text-sm text-white shadow-xs break-words [overflow-wrap:anywhere]">
+                      <div className="max-w-[90%] sm:max-w-[85%] min-w-0 rounded-2xl rounded-tr-xs bg-slate-900 px-3.5 sm:px-4 py-2 sm:py-2.5 text-xs sm:text-sm text-white shadow-xs break-words [overflow-wrap:anywhere]">
                         {msg.content}
                       </div>
                     </div>
                   ) : (
                     /* Assistant Message Bubble */
                     <div className="flex justify-start min-w-0 w-full">
-                      <div className="max-w-[95%] w-full min-w-0 overflow-hidden rounded-2xl rounded-tl-xs bg-[#f8fafc] border border-slate-200 p-5 shadow-xs space-y-3 break-words [overflow-wrap:anywhere]">
+                      <div className="w-full min-w-0 overflow-hidden rounded-2xl rounded-tl-xs bg-[#f8fafc] border border-slate-200 p-3.5 sm:p-5 shadow-xs space-y-3 break-words [overflow-wrap:anywhere]">
                         {/* Assistant message header */}
-                        <div className="flex items-center justify-between border-b border-slate-200/80 pb-2.5">
-                          <div className="flex items-center gap-2">
-                            <div className="w-5 h-5 rounded-md bg-[#f05a28] flex items-center justify-center text-white">
+                        <div className="flex items-center justify-between border-b border-slate-200/80 pb-2 sm:pb-2.5 gap-2">
+                          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+                            <div className="w-5 h-5 rounded-md bg-[#f05a28] flex items-center justify-center text-white shrink-0">
                               <Sparkles className="w-3 h-3" />
                             </div>
-                            <span className="text-xs font-bold text-slate-800">
+                            <span className="text-xs font-bold text-slate-800 truncate">
                               Developer Assistant
                             </span>
                           </div>
                           {msg.status === 'streaming' ? (
-                            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-orange-700 bg-orange-50 px-2.5 py-0.5 rounded-full border border-orange-200 animate-pulse">
-                              <span className="w-2 h-2 rounded-full bg-[#f05a28]" />
+                            <div className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-[11px] font-semibold text-orange-700 bg-orange-50 px-2 sm:px-2.5 py-0.5 rounded-full border border-orange-200 animate-pulse shrink-0">
+                              <span className="w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full bg-[#f05a28]" />
                               <span>Streaming Live</span>
                             </div>
                           ) : (
-                            <div className="flex items-center gap-1.5 text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2.5 py-0.5 rounded-full border border-emerald-200">
+                            <div className="flex items-center gap-1 sm:gap-1.5 text-[10px] sm:text-[11px] font-semibold text-emerald-700 bg-emerald-50 px-2 sm:px-2.5 py-0.5 rounded-full border border-emerald-200 shrink-0">
                               <CheckCircle2 className="w-3 h-3 text-[#00b074]" />
-                              <span>Verified Grounded</span>
+                              <span>Grounded</span>
                             </div>
                           )}
                         </div>
 
                         {/* Markdown & Kotlin syntax highlighter */}
-                        <div className="relative">
+                        <div className="relative min-w-0 max-w-full overflow-hidden">
                           {msg.content ? (
                             <MarkdownRenderer content={msg.content} />
                           ) : (
@@ -937,13 +1077,13 @@ function DashboardApp() {
 
                         {/* Telemetry Footer */}
                         {msg.latencyMs && (
-                          <div className="flex items-center justify-between pt-1 text-[10px] text-slate-400 font-mono">
-                            <span className="flex items-center gap-1">
-                              <Activity className="w-3 h-3 text-emerald-500" />
+                          <div className="flex items-center justify-between pt-1 text-[10px] text-slate-400 font-mono gap-2 flex-wrap">
+                            <span className="flex items-center gap-1 truncate">
+                              <Activity className="w-3 h-3 text-emerald-500 shrink-0" />
                               <span>Latency: {msg.latencyMs.toFixed(0)} ms</span>
                             </span>
-                            <span className="flex items-center gap-1" title={`Inference Model: ${msg.model || 'gpt-oss-120b'}`}>
-                              <Cpu className="w-3 h-3 text-slate-400" />
+                            <span className="flex items-center gap-1 truncate" title={`Inference Model: ${msg.model || 'gpt-oss-120b'}`}>
+                              <Cpu className="w-3 h-3 text-slate-400 shrink-0" />
                               <span>Model: {msg.model || 'gpt-oss-120b'}</span>
                             </span>
                           </div>
@@ -957,9 +1097,9 @@ function DashboardApp() {
               {/* Generating / Thinking Pulse Indicator (only before first token arrives) */}
               {isLoading && !messages.some((m) => m.status === 'streaming' && m.content.length > 0) && (
                 <div className="flex justify-start">
-                  <div className="rounded-2xl rounded-tl-xs bg-[#f8fafc] border border-slate-200 px-4 py-3 shadow-xs flex items-center gap-3">
-                    <Loader2 className="w-4 h-4 text-[#f05a28] animate-spin" />
-                    <span className="text-xs text-slate-600 font-medium">
+                  <div className="rounded-2xl rounded-tl-xs bg-[#f8fafc] border border-slate-200 px-3.5 py-2.5 sm:px-4 sm:py-3 shadow-xs flex items-center gap-2.5 sm:gap-3">
+                    <Loader2 className="w-4 h-4 text-[#f05a28] animate-spin shrink-0" />
+                    <span className="text-xs text-slate-600 font-medium truncate">
                       Retrieving neural vectors & generating answer...
                     </span>
                   </div>
@@ -971,10 +1111,10 @@ function DashboardApp() {
 
             {/* Shifted Bottom Input Box */}
             <div className="max-w-3xl mx-auto w-full pt-2">
-              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-3 focus-within:border-slate-300 focus-within:shadow-md transition-all">
+              <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-2.5 sm:p-3 focus-within:border-slate-300 focus-within:shadow-md transition-all">
                 {/* Top Row: Context Selectors (SERVICE + MODEL) */}
-                <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5">
-                  <div className="flex items-center gap-1.5">
+                <div className="flex flex-wrap items-center justify-between gap-1.5 sm:gap-2 mb-1.5">
+                  <div className="flex items-center gap-1.5 flex-wrap">
                     <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase">
                       SERVICE
                     </span>
@@ -988,7 +1128,7 @@ function DashboardApp() {
                             setSelectedService(e.target.value);
                           }
                         }}
-                        className="appearance-none bg-slate-100 hover:bg-slate-200/70 text-slate-700 text-xs font-semibold pl-2.5 pr-6 py-1 rounded-lg border border-slate-200/60 focus:outline-none cursor-pointer"
+                        className="appearance-none bg-slate-100 hover:bg-slate-200/70 text-slate-700 text-xs font-semibold pl-2 sm:pl-2.5 pr-5 sm:pr-6 py-1 rounded-lg border border-slate-200/60 focus:outline-none cursor-pointer max-w-[150px] sm:max-w-[200px] truncate"
                       >
                         {services.map((s) => (
                           <option key={s.id} value={s.id}>
@@ -997,12 +1137,12 @@ function DashboardApp() {
                         ))}
                         <option value="__add_new__">+ Add Microservice...</option>
                       </select>
-                      <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2 top-2 pointer-events-none" />
+                      <ChevronDown className="w-3 h-3 text-slate-400 absolute right-1.5 sm:right-2 top-2 pointer-events-none" />
                     </div>
                   </div>
 
                   {models.length > 0 && (
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap">
                       <span className="text-[10px] font-bold text-slate-400 tracking-wider uppercase flex items-center gap-1">
                         <Cpu className="w-3 h-3 text-[#f05a28]" />
                         MODEL
@@ -1011,7 +1151,7 @@ function DashboardApp() {
                         <select
                           value={selectedModel}
                           onChange={(e) => setSelectedModel(e.target.value)}
-                          className="appearance-none bg-slate-100 hover:bg-slate-200/70 text-slate-700 text-xs font-semibold pl-2.5 pr-6 py-1 rounded-lg border border-slate-200/60 focus:outline-none cursor-pointer"
+                          className="appearance-none bg-slate-100 hover:bg-slate-200/70 text-slate-700 text-xs font-semibold pl-2 sm:pl-2.5 pr-5 sm:pr-6 py-1 rounded-lg border border-slate-200/60 focus:outline-none cursor-pointer max-w-[140px] sm:max-w-[190px] truncate"
                         >
                           {models.map((m) => (
                             <option key={m.id} value={m.id}>
@@ -1019,7 +1159,7 @@ function DashboardApp() {
                             </option>
                           ))}
                         </select>
-                        <ChevronDown className="w-3 h-3 text-slate-400 absolute right-2 top-2 pointer-events-none" />
+                        <ChevronDown className="w-3 h-3 text-slate-400 absolute right-1.5 sm:right-2 top-2 pointer-events-none" />
                       </div>
                     </div>
                   )}
@@ -1041,16 +1181,17 @@ function DashboardApp() {
                   className="w-full resize-none bg-transparent text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-none py-1"
                 />
 
-                {/* Bottom Row: Circular Orange Up-Arrow Send Button */}
+                {/* Bottom Row: Controls */}
                 <div className="flex items-center justify-between pt-1">
-                  <span className="text-[10px] text-slate-400">
-                    Press Enter to send, Shift + Enter for new line
+                  <span className="text-[10px] text-slate-400 hidden xs:inline">
+                    Enter to send, Shift + Enter for new line
                   </span>
+                  <div className="flex-1 xs:hidden" />
                   <button
                     onClick={() => handleStartChat()}
                     disabled={!queryInput.trim() || isLoading}
                     type="button"
-                    className={`w-7 h-7 rounded-full flex items-center justify-center transition-all cursor-pointer ${
+                    className={`w-7 h-7 rounded-full flex items-center justify-center transition-all cursor-pointer shrink-0 ${
                       queryInput.trim() && !isLoading
                         ? 'bg-[#f05a28] text-white shadow-xs hover:bg-[#d94b1c]'
                         : 'bg-orange-100 text-[#f05a28] hover:bg-[#f05a28] hover:text-white'
