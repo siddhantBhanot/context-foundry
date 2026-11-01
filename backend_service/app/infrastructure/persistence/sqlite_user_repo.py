@@ -31,6 +31,31 @@ class SqliteUserRepository(UserRepository):
             await conn.commit()
         return user
 
+    async def upsert_user(self, user: User) -> User:
+        normalized_email = user.email.lower().strip()
+        async with self.db.connection() as conn:
+            await conn.execute(
+                """
+                INSERT INTO users (id, email, name, role, password_hash, created_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                ON CONFLICT(email) DO UPDATE SET
+                    name = excluded.name,
+                    role = excluded.role,
+                    password_hash = excluded.password_hash
+                """,
+                (
+                    user.id,
+                    normalized_email,
+                    user.name.strip(),
+                    user.role or "developer",
+                    user.password_hash,
+                    user.created_at.isoformat(),
+                ),
+            )
+            await conn.commit()
+        saved = await self.get_by_email(normalized_email)
+        return saved or user
+
     async def get_by_email(self, email: str) -> Optional[User]:
         normalized_email = email.lower().strip()
         async with self.db.connection() as conn:

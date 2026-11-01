@@ -18,6 +18,14 @@ services:
         value: direct
       - key: ALLOW_USER_REGISTRATION
         value: "false"
+      - key: ADMIN_EMAIL
+        value: siddhant@contextfoundry.dev
+      - key: ADMIN_NAME
+        value: Siddhant Bhanot
+      - key: ADMIN_ROLE
+        value: developer
+      - key: ADMIN_PASSWORD_HASH
+        value: "pbkdf2_sha256$100000$bd82e28a920cf74d81446840384ce9d2$9df44e645d17eb9b9c2559d9c4c7165f0e665fdbb18282862cf224d16d0e0ef6"
       - key: USE_LOCAL_JINA_EMBEDDINGS
         value: "false"
       - key: GEMINI_MODEL_ID

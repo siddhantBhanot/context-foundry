@@ -37,6 +37,48 @@ class AuthService:
     def registration_enabled(self) -> bool:
         return bool(self.settings.allow_user_registration)
 
+    async def ensure_admin_user(self) -> Optional[User]:
+        """
+        Idempotently seed or synchronize the configured administrator account.
+        Uses a deterministic UUIDv5 derived from the admin email so JWT tokens
+        remain valid across container restarts on ephemeral filesystems (e.g., Render).
+        """
+        raw_email = (self.settings.admin_email or "").strip().lower()
+        raw_password = self.settings.admin_password
+        raw_hash = (self.settings.admin_password_hash or "").strip()
+
+        if not raw_email or (not raw_password and not raw_hash):
+            return None
+
+        existing = await self.user_repo.get_by_email(raw_email)
+        if raw_password:
+            if existing and verify_password(raw_password, existing.password_hash):
+                pw_hash = existing.password_hash
+            else:
+                pw_hash = hash_password(raw_password)
+        else:
+            pw_hash = raw_hash
+
+        clean_role = (self.settings.admin_role or "developer").strip().lower()
+        if clean_role not in {"developer", "banking_staff"}:
+            clean_role = "developer"
+
+        admin_id = existing.id if existing else str(
+            uuid.uuid5(uuid.NAMESPACE_DNS, f"contextfoundry-admin:{raw_email}")
+        )
+        admin_user = User(
+            id=admin_id,
+            email=raw_email,
+            name=(self.settings.admin_name or "Administrator").strip(),
+            role=clean_role,
+            password_hash=pw_hash,
+        )
+        if hasattr(self.user_repo, "upsert_user"):
+            return await self.user_repo.upsert_user(admin_user)
+        if not existing:
+            return await self.user_repo.create_user(admin_user)
+        return existing
+
     async def signup(self, email: str, password: str, name: str, role: str = "developer") -> Dict[str, Any]:
         if not self.registration_enabled:
             raise ForbiddenException("Account creation is disabled on this deployment.")
@@ -89,6 +131,13 @@ class AuthService:
 
         user = await self.user_repo.get_by_email(clean_email)
 
+        if (
+            not user
+            and self.settings.admin_email
+            and clean_email == self.settings.admin_email.strip().lower()
+        ):
+            user = await self.ensure_admin_user()
+
         # The hardcoded demo account (known password) is only usable when registration is enabled,
         # even if it already exists in the database. Otherwise anyone could log in with it.
         if clean_email in self.DEMO_EMAILS:
@@ -133,6 +182,9 @@ class AuthService:
             raise AuthenticationException("Malformed token payload.")
 
         user = await self.user_repo.get_by_id(user_id)
+        if not user and self.settings.admin_email:
+            await self.ensure_admin_user()
+            user = await self.user_repo.get_by_id(user_id)
         if not user:
             raise AuthenticationException("User account associated with this token not found.")
 

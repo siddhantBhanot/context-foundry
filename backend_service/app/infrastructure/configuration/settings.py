@@ -86,6 +86,23 @@ class Settings(BaseSettings):
         default_factory=lambda: int(os.getenv("JWT_ACCESS_TOKEN_EXPIRE_MINUTES", "1440"))
     )
 
+    # Bootstrap / Admin Account Auto-Seeding (survives ephemeral container restarts)
+    admin_email: Optional[str] = Field(
+        default_factory=lambda: os.getenv("ADMIN_EMAIL") or None
+    )
+    admin_password: Optional[str] = Field(
+        default_factory=lambda: os.getenv("ADMIN_PASSWORD") or None
+    )
+    admin_password_hash: Optional[str] = Field(
+        default_factory=lambda: os.getenv("ADMIN_PASSWORD_HASH") or None
+    )
+    admin_name: str = Field(
+        default_factory=lambda: os.getenv("ADMIN_NAME", "Siddhant Bhanot")
+    )
+    admin_role: str = Field(
+        default_factory=lambda: os.getenv("ADMIN_ROLE", "developer")
+    )
+
     # RAG Client adapter mode ("direct" bridges to rag_service, "mock" is standalone offline)
     rag_client_mode: str = Field(default_factory=lambda: os.getenv("RAG_CLIENT_MODE", "direct"))
     default_service: str = Field(default_factory=lambda: os.getenv("DEFAULT_SERVICE", "income-assessment-service"))

@@ -9,6 +9,10 @@ class UserRepository(Protocol):
         """Persist a new user entity."""
         ...
 
+    async def upsert_user(self, user: User) -> User:
+        """Insert a user or update their profile and password hash if the email already exists."""
+        ...
+
     async def get_by_email(self, email: str) -> Optional[User]:
         """Lookup a user by email address (case-insensitive)."""
         ...

@@ -43,6 +43,15 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     db = get_database()
     await db.init_schema()
     logger.info("SQLite schema initialized at: %s", settings.database_path)
+
+    from backend_service.app.application.services.auth_service import AuthService
+    from backend_service.app.infrastructure.persistence.sqlite_user_repo import SqliteUserRepository
+
+    auth_service = AuthService(user_repo=SqliteUserRepository(db=db), settings=settings)
+    seeded_admin = await auth_service.ensure_admin_user()
+    if seeded_admin:
+        logger.info("Verified/seeded bootstrap admin user: %s (id=%s)", seeded_admin.email, seeded_admin.id)
+
     logger.info("RAG Client Adapter mode: %s", settings.rag_client_mode)
     yield
     logger.info("Shutting down backend_service...")
